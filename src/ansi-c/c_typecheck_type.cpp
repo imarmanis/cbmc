@@ -616,6 +616,11 @@ void c_typecheck_baset::typecheck_array_type(array_typet &type)
     typecheck_expr(size);
     make_index_type(size);
 
+    // Preserve the source bound after name and type resolution, but before a
+    // variable-length array bound is replaced by a callee-local helper.
+    if(type.get_bool(ID_C_array_size_static))
+      type.add(ID_C_static_array_size) = size;
+
     // The size need not be a constant!
     // We simplify it, for the benefit of array initialisation.
 
@@ -1730,11 +1735,23 @@ void c_typecheck_baset::adjust_function_parameter(typet &type) const
     const c_qualifierst qualifiers{
       static_cast<const typet &>(type.find(ID_C_array_declarator_qualifiers))};
 
+    // C11 6.7.6.3p7: record whether static was used inside the
+    // brackets (meaning the caller guarantees a minimum array size).
+    const bool is_static = type.get_bool(ID_C_array_size_static);
+    const irept static_size = type.find(ID_C_static_array_size);
+
     type = pointer_type(array_type.element_type());
     type.add_source_location() = source_location;
 
     // Transfer the bracket qualifiers onto the pointer type.
     qualifiers.write(type);
+
+    // Preserve the static array size information on the adjusted
+    // pointer type so that later passes (e.g., goto-check) can use it
+    // to verify that the caller provides a sufficiently large array. This
+    // is stored as a comment so that it does not affect type equality.
+    if(is_static && static_size.is_not_nil())
+      type.add(ID_C_static_array_size) = static_size;
   }
   else if(type.id()==ID_code)
   {
