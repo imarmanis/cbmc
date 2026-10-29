@@ -1,0 +1,13 @@
+CORE
+signed_properties.c
+--pointer-check --strict-static-array --show-properties
+^EXIT=0$
+^SIGNAL=0$
+^Property read_exact_signed.pointer_dereference.1:$
+^  \(signed __CPROVER_bitvector\[65\]\)\(signed long int\)i >= 0 && !\(\(signed __CPROVER_bitvector\[65\]\)\(signed long int\)i >= 4\)$
+--
+^Property read_exact_signed.pointer_dereference.[2-9][0-9]*:$
+^warning: ignoring
+--
+Checks that exact-size mode emits a direct lower-and-upper index range for a
+signed dynamic index.

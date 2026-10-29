@@ -81,9 +81,9 @@ public:
     error_labels = _options.get_list_option("error-label");
     enable_pointer_primitive_check =
       _options.get_bool_option("pointer-primitive-check");
-    enable_static_array_dynamic_check =
+    enable_static_array =
       _options.get_bool_option("static-array");
-    enable_static_array_exact_size =
+    enable_strict_static_array =
       _options.get_bool_option("strict-static-array");
   }
 
@@ -124,6 +124,10 @@ protected:
 
   std::optional<static_parameter_pointert>
   get_static_parameter_pointer(const exprt &pointer) const;
+
+  std::optional<exprt> exact_static_parameter_index_coverage(
+    const exprt &pointer,
+    const exprt &access_size) const;
 
   std::optional<exprt> static_parameter_coverage(
     const exprt &pointer,
@@ -326,8 +330,8 @@ protected:
   bool retain_trivial;
   bool enable_assert_to_assume;
   bool enable_pointer_primitive_check;
-  bool enable_static_array_dynamic_check;
-  bool enable_static_array_exact_size;
+  bool enable_static_array;
+  bool enable_strict_static_array;
 
   /// Maps a named-check name to the corresponding boolean flag.
   std::map<irep_idt, bool *> name_to_flag{
@@ -1664,11 +1668,92 @@ goto_check_ct::get_static_parameter_pointer(const exprt &pointer) const
   return {};
 }
 
+std::optional<exprt>
+goto_check_ct::exact_static_parameter_index_coverage(
+  const exprt &pointer,
+  const exprt &access_size) const
+{
+  if(!enable_strict_static_array || pointer.id() != ID_plus)
+    return {};
+
+  const exprt *base_pointer = nullptr;
+  const exprt *index = nullptr;
+  for(const auto &operand : pointer.operands())
+  {
+    if(operand.type().id() == ID_pointer)
+    {
+      if(base_pointer != nullptr)
+        return {};
+      base_pointer = &operand;
+    }
+    else
+    {
+      if(index != nullptr)
+        return {};
+      index = &operand;
+    }
+  }
+
+  if(base_pointer == nullptr || index == nullptr)
+    return {};
+
+  while(
+    base_pointer->id() == ID_typecast &&
+    base_pointer->operands().size() == 1 &&
+    to_typecast_expr(*base_pointer).op().type().id() == ID_pointer)
+  {
+    base_pointer = &to_typecast_expr(*base_pointer).op();
+  }
+
+  if(base_pointer->id() != ID_symbol)
+    return {};
+
+  const irep_idt &identifier = to_symbol_expr(*base_pointer).identifier();
+  const auto region = static_array_parameter_bytes.find(identifier);
+  if(region == static_array_parameter_bytes.end())
+    return {};
+
+  const auto element_size = pointer_offset_size(
+    to_pointer_type(base_pointer->type()).base_type(), ns);
+  const auto size =
+    numeric_cast<mp_integer>(simplify_expr(access_size, ns));
+  if(
+    !element_size.has_value() || *element_size <= bytest{0} ||
+    !size.has_value() || bytest{*size} != *element_size ||
+    region->second % *element_size != bytest{0})
+  {
+    return {};
+  }
+
+  if(index->type().id() != ID_signedbv && index->type().id() != ID_unsignedbv)
+    return {};
+
+  const mp_integer element_count = region->second / *element_size;
+  std::size_t width = to_bitvector_type(index->type()).get_width() + 1;
+  while(element_count > power(2, width - 1) - 1)
+    ++width;
+
+  const signedbv_typet wide_type{width};
+  const exprt wide_index =
+    typecast_exprt::conditional_cast(*index, wide_type);
+  return and_exprt{
+    binary_relation_exprt{
+      wide_index, ID_ge, from_integer(0, wide_type)},
+    binary_relation_exprt{
+      wide_index, ID_lt, from_integer(element_count, wide_type)}};
+}
+
 std::optional<exprt> goto_check_ct::static_parameter_coverage(
   const exprt &pointer,
   const exprt &access_size) const
 {
   const exprt simplified_pointer = simplify_expr(pointer, ns);
+  if(auto exact_index_coverage = exact_static_parameter_index_coverage(
+       simplified_pointer, access_size))
+  {
+    return exact_index_coverage;
+  }
+
   const auto base = get_static_parameter_pointer(simplified_pointer);
   const auto size =
     numeric_cast<mp_integer>(simplify_expr(access_size, ns));
@@ -1688,14 +1773,14 @@ std::optional<exprt> goto_check_ct::static_parameter_coverage(
     if(is_covered)
       return true_exprt{};
 
-    return enable_static_array_exact_size
+    return enable_strict_static_array
              ? std::optional<exprt>{false_exprt{}}
              : std::optional<exprt>{};
   }
 
   if(
-    !enable_static_array_dynamic_check &&
-    !enable_static_array_exact_size)
+    !enable_static_array &&
+    !enable_strict_static_array)
   {
     return {};
   }
@@ -1800,7 +1885,7 @@ void goto_check_ct::pointer_validity_check(
     if(*static_coverage == true)
       return;
 
-    if(enable_static_array_exact_size)
+    if(enable_strict_static_array)
     {
       add_guarded_property(
         std::move(*static_coverage),
@@ -2727,7 +2812,7 @@ void goto_check_ct::check_static_array_parameters_at_entry(
     return;
 
   const std::string entry_check_comment =
-    enable_static_array_exact_size
+    enable_strict_static_array
       ? "function parameter does not have exactly its static array size remaining"
       : "function parameter does not provide access to its static minimum";
 
@@ -2808,7 +2893,7 @@ void goto_check_ct::check_static_array_parameters_at_entry(
     {
       conditions.push_back(condition.assertion);
     }
-    if(enable_static_array_exact_size)
+    if(enable_strict_static_array)
     {
       conditions.push_back(
         static_array_exact_size_condition(pointer, byte_size));
@@ -2961,7 +3046,7 @@ void goto_check_ct::check_static_array_parameter_calls(
         identity);
     }
 
-    if(enable_static_array_exact_size)
+    if(enable_strict_static_array)
     {
       add_guarded_property(
         static_array_exact_size_condition(argument, byte_size),
