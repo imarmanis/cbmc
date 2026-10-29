@@ -17,12 +17,14 @@ Author: Remi Delmas, delmarsd@amazon.com
 
 dfcc_swap_and_wrapt::dfcc_swap_and_wrapt(
   goto_modelt &goto_model,
+  const irep_idt &harness_id,
   message_handlert &message_handler,
   dfcc_libraryt &library,
   dfcc_instrumentt &instrument,
   dfcc_spec_functionst &spec_functions,
   dfcc_contract_handlert &contract_handler)
   : goto_model(goto_model),
+    harness_id(harness_id),
     message_handler(message_handler),
     log(message_handler),
     library(library),
@@ -33,6 +35,42 @@ dfcc_swap_and_wrapt::dfcc_swap_and_wrapt(
 {
 }
 
+static void remove_static_array_bounds_from_check_wrapper(
+  goto_modelt &goto_model,
+  const irep_idt &wrapper_id,
+  const irep_idt &harness_id)
+{
+  symbolt &wrapper_symbol =
+    goto_model.symbol_table.get_writeable_ref(wrapper_id);
+  auto &wrapper_parameters =
+    to_code_type(wrapper_symbol.type).parameters();
+
+  for(auto &parameter : wrapper_parameters)
+  {
+    parameter.type().remove(ID_C_static_array_size);
+    if(!parameter.get_identifier().empty())
+    {
+      goto_model.symbol_table
+        .get_writeable_ref(parameter.get_identifier())
+        .type.remove(ID_C_static_array_size);
+    }
+  }
+
+  auto harness = goto_model.goto_functions.function_map.find(harness_id);
+  INVARIANT(
+    harness != goto_model.goto_functions.function_map.end(),
+    "DFCC proof harness must exist");
+  for(auto &instruction : harness->second.body.instructions)
+  {
+    if(
+      instruction.is_function_call() &&
+      instruction.call_function().id() == ID_symbol &&
+      to_symbol_expr(instruction.call_function()).identifier() == wrapper_id)
+    {
+      instruction.call_function().type() = wrapper_symbol.type;
+    }
+  }
+}
 // static map
 std::map<
   irep_idt,
@@ -143,6 +181,8 @@ void dfcc_swap_and_wrapt::check_contract(
   const irep_idt wrapped_id =
     id2string(wrapper_id) + "_wrapped_for_contract_checking";
   dfcc_utilst::wrap_function(goto_model, wrapper_id, wrapped_id);
+  remove_static_array_bounds_from_check_wrapper(
+    goto_model, wrapper_id, harness_id);
 
   // wrapper body
   goto_programt body;

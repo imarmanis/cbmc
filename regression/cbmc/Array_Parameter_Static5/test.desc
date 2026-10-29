@@ -1,0 +1,11 @@
+CORE
+main.c
+--function f --pointer-check
+^EXIT=0$
+^SIGNAL=0$
+VERIFICATION SUCCESSFUL
+--
+^warning: ignoring
+--
+Checks that --function allocates and initializes the constant minimum number of
+elements required by a static array parameter.

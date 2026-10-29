@@ -1,0 +1,12 @@
+CORE
+main.c
+--pointer-check
+^EXIT=10$
+^SIGNAL=0$
+function argument failure: pointer outside object bounds.*: FAILURE$
+--
+^warning: ignoring
+INVARIANT
+--
+Checks positional substitution of a runtime static bound when prototype
+parameter identifiers have been erased and no definition is present.

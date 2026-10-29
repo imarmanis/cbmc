@@ -1,0 +1,12 @@
+CORE dfcc-only
+main.c
+--dfcc main --enforce-contract-rec f
+^\[f.array_parameter.\d+\].*function argument failure: pointer outside object bounds.*: FAILURE$
+^VERIFICATION FAILED$
+^EXIT=10$
+^SIGNAL=0$
+--
+^warning: ignoring
+--
+Checks that DFCC removes static metadata only from calls made directly by the
+proof harness, retaining the C call contract on recursive calls.

@@ -1,0 +1,12 @@
+CORE
+main.c
+--pointer-check
+^EXIT=0$
+^SIGNAL=0$
+VERIFICATION SUCCESSFUL
+--
+^warning: ignoring
+--
+Checks that array arguments with exactly or more than the static minimum size
+are accepted, including interior pointers, runtime bounds, and both orders of
+static and const.

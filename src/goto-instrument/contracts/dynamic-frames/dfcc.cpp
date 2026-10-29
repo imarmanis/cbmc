@@ -159,6 +159,7 @@ dfcct::dfcct(
       contract_clauses_codegen),
     swap_and_wrap(
       goto_model,
+      harness_id,
       message_handler,
       library,
       instrument,

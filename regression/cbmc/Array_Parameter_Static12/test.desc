@@ -1,0 +1,11 @@
+CORE
+main.c
+--pointer-check
+^EXIT=10$
+^SIGNAL=0$
+function parameter does not provide access to its static minimum.*: FAILURE$
+--
+function argument failure:.*: FAILURE$
+^warning: ignoring
+--
+Checks that a call-site pragma cannot leave callee-side elimination unguarded.

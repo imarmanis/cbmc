@@ -1,0 +1,11 @@
+CORE
+main.c
+--pointer-check
+^EXIT=10$
+^SIGNAL=0$
+dereference failure:.*: FAILURE$
+--
+^warning: ignoring
+--
+Checks that a pointer-to-integer-to-pointer conversion is not covered by the
+original static parameter region.

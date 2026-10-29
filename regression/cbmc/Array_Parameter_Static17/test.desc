@@ -1,0 +1,12 @@
+CORE
+main.c
+--pointer-check
+^EXIT=0$
+^SIGNAL=0$
+VERIFICATION SUCCESSFUL
+--
+function argument failure:
+^warning: ignoring
+--
+Checks that the accepted static-zero extension does not add an unconditionally
+failing positive-size property.

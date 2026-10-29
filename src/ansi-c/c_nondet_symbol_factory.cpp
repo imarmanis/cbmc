@@ -17,6 +17,7 @@ Author: Diffblue Ltd.
 #include <util/namespace.h>
 #include <util/nondet_bool.h>
 #include <util/pointer_expr.h>
+#include <util/simplify_expr.h>
 #include <util/std_expr.h>
 #include <util/symbol.h>
 
@@ -83,15 +84,48 @@ void symbol_factoryt::gen_nondet_init(
     code_blockt non_null_inst;
 
     typet object_type = base_type;
+    std::optional<mp_integer> static_array_size;
+    const irept &static_size_irep = type.find(ID_C_static_array_size);
+    if(static_size_irep.is_not_nil())
+    {
+      const exprt simplified_size = simplify_expr(
+        static_cast<const exprt &>(static_size_irep), ns);
+      const auto size = numeric_cast<mp_integer>(simplified_size);
+      if(size.has_value() && *size > 0)
+      {
+        static_array_size = size;
+        object_type =
+          array_typet{base_type, from_integer(*size, c_index_type())};
+      }
+    }
+
     if(object_type.id() == ID_empty)
       object_type = char_type();
 
     exprt init_expr = allocate_objects.allocate_object(
       non_null_inst, expr, object_type, lifetime);
 
-    gen_nondet_init(non_null_inst, init_expr, depth + 1, recursion_set, true);
+    if(static_array_size.has_value())
+    {
+      for(mp_integer index = 0; index < *static_array_size; ++index)
+      {
+        gen_nondet_init(
+          non_null_inst,
+          dereference_exprt{
+            plus_exprt{expr, from_integer(index, c_index_type())}},
+          depth + 1,
+          recursion_set,
+          true);
+      }
+    }
+    else
+    {
+      gen_nondet_init(
+        non_null_inst, init_expr, depth + 1, recursion_set, true);
+    }
 
-    if(depth < object_factory_params.min_null_tree_depth)
+    if(static_array_size.has_value() ||
+       depth < object_factory_params.min_null_tree_depth)
     {
       // Add the following code to assignments:
       // <expr> = <aoe>;

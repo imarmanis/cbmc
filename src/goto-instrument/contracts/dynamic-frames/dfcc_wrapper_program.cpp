@@ -767,6 +767,11 @@ void dfcc_wrapper_programt::encode_checked_function_call()
 {
   // build call to the wrapped function
   code_function_callt call(wrapped_symbol.symbol_expr());
+  for(auto &parameter :
+      to_code_type(call.function().type()).parameters())
+  {
+    parameter.type().remove(ID_C_static_array_size);
+  }
 
   if(return_value_opt)
   {
