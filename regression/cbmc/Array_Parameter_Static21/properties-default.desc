@@ -1,0 +1,12 @@
+CORE
+main.c
+--pointer-check --show-properties
+^EXIT=0$
+^SIGNAL=0$
+^Property read_static.pointer_dereference.1:$
+^Property read_static.pointer_dereference.[2-9][0-9]*:$
+--
+^warning: ignoring
+--
+Checks that symbolic accesses through a static array parameter retain the
+ordinary decomposed pointer properties unless the dynamic-check option is used.

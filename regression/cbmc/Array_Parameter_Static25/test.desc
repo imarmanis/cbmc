@@ -1,0 +1,10 @@
+CORE
+main.c
+--pointer-check --static-array --unwind 5 --unwinding-assertions
+^EXIT=0$
+^SIGNAL=0$
+VERIFICATION SUCCESSFUL
+--
+^warning: ignoring
+--
+Checks symbolic static-region accesses controlled by a loop bound.

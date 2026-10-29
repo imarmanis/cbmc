@@ -1,0 +1,12 @@
+CORE dfcc-only
+main.c
+--dfcc main --enforce-contract f _ --show-properties --static-array
+^EXIT=0$
+^SIGNAL=0$
+^Property f.pointer_dereference.1:$
+--
+^Property f.pointer_dereference.[2-9][0-9]*:$
+^warning: ignoring
+--
+Checks that DFCC retains one combined symbolic residual for x[i] rather than
+six decomposed pointer properties.
