@@ -4,6 +4,7 @@ main.c
 ^EXIT=0$
 ^SIGNAL=0$
 ^Property read_exact.pointer_dereference.1:$
+^  \(signed __CPROVER_bitvector\[65\]\)\(signed long int\)i >= 0 && !\(\(signed __CPROVER_bitvector\[65\]\)\(signed long int\)i >= 4\)$
 --
 ^Property read_exact.pointer_dereference.[2-9][0-9]*:$
 ^warning: ignoring
