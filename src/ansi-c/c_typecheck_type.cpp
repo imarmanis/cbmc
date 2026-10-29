@@ -1723,27 +1723,18 @@ void c_typecheck_baset::adjust_function_parameter(typet &type) const
 
     source_locationt source_location = type.source_location();
 
-    // Read qualifiers that the parser placed on the array type from
-    // within the bracket declarator (const, volatile, restrict, _Atomic).
-    c_qualifierst qualifiers{type};
-
-    // C11 6.7.6.3p7: record whether static was used inside the
-    // brackets (meaning the caller guarantees a minimum array size).
-    const bool is_static = type.get_bool(ID_C_array_size_static);
-    const exprt size = array_type.size();
+    // Read the qualifiers from within the bracket declarator (const,
+    // volatile, restrict, _Atomic). Qualifiers on the array type itself
+    // may instead stem from a qualified typedef'd array type, which apply
+    // to the element type (C11 6.7.3p9), see ansi_c_convert_typet.
+    const c_qualifierst qualifiers{
+      static_cast<const typet &>(type.find(ID_C_array_declarator_qualifiers))};
 
     type = pointer_type(array_type.element_type());
     type.add_source_location() = source_location;
 
     // Transfer the bracket qualifiers onto the pointer type.
     qualifiers.write(type);
-
-    // Preserve the static array size information on the adjusted
-    // pointer type so that later passes (e.g., goto-check) can use it
-    // to verify that the caller provides a sufficiently large array. This
-    // is stored as a comment so that it does not affect type equality.
-    if(is_static && size.is_not_nil())
-      type.add(ID_C_static_array_size, size);
   }
   else if(type.id()==ID_code)
   {

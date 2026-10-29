@@ -7,8 +7,7 @@ main.c
 ^warning: ignoring
 ^CONVERSION ERROR$
 --
-Tests that type qualifiers and static within array brackets
-in parameter declarators are handled correctly (C11 6.7.6.3p7):
-const prevents parameter modification, restrict/volatile are preserved,
-static records minimum size, and type compatibility is maintained
-between declarations with and without qualifiers.
+Tests that type qualifiers within array brackets in parameter declarators
+are handled correctly (C11 6.7.6.3p7): const prevents parameter
+modification, restrict/volatile are preserved, and type compatibility is
+maintained between declarations with and without qualifiers.
