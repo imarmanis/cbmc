@@ -1,0 +1,11 @@
+CORE
+main.c
+--pointer-check --show-properties
+^EXIT=0$
+^SIGNAL=0$
+^Property read_volatile.pointer_dereference.\d+:$
+--
+^warning: ignoring
+--
+Checks that volatile static parameter pointers retain ordinary dereference
+properties rather than using the static-region elimination.
