@@ -1,0 +1,11 @@
+CORE
+valid.c
+--pointer-check --strict-static-array
+^EXIT=0$
+^SIGNAL=0$
+VERIFICATION SUCCESSFUL
+--
+^warning: ignoring
+--
+Checks that exact-size mode accepts an N-element object and an interior pointer
+with exactly N elements remaining.

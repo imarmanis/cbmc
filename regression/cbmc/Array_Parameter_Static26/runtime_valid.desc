@@ -1,0 +1,11 @@
+CORE
+runtime_valid.c
+--pointer-check --strict-static-array
+^EXIT=0$
+^SIGNAL=0$
+VERIFICATION SUCCESSFUL
+--
+^warning: ignoring
+--
+Checks exact remaining extent after substituting a runtime static bound at the
+call site.

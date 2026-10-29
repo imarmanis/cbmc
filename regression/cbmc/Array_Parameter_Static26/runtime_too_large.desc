@@ -1,0 +1,11 @@
+CORE
+runtime_too_large.c
+--pointer-check --strict-static-array
+^EXIT=10$
+^SIGNAL=0$
+static array does not have exactly the declared size remaining.*: FAILURE$
+--
+^warning: ignoring
+--
+Checks that exact mode rejects a runtime bound smaller than the argument's
+remaining extent.

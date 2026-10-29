@@ -1,0 +1,11 @@
+CORE
+outside.c
+--pointer-check --strict-static-array
+^EXIT=10$
+^SIGNAL=0$
+access is outside the exact static array size.*: FAILURE$
+--
+^warning: ignoring
+--
+Checks that exact-size mode rejects a dynamic access outside the declared
+static extent without falling back to ordinary larger-object checks.

@@ -1,0 +1,12 @@
+CORE
+main.c
+--pointer-check --static-array --strict-static-array --show-properties
+^EXIT=0$
+^SIGNAL=0$
+^Property read_exact.pointer_dereference.1:$
+--
+^Property read_exact.pointer_dereference.[2-9][0-9]*:$
+^warning: ignoring
+--
+Checks that exact-size semantics take precedence when both static-array options
+are supplied.
