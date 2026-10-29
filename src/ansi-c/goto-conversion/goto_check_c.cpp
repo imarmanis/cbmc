@@ -83,6 +83,8 @@ public:
       _options.get_bool_option("pointer-primitive-check");
     enable_static_array_dynamic_check =
       _options.get_bool_option("static-array");
+    enable_static_array_exact_size =
+      _options.get_bool_option("strict-static-array");
   }
 
   typedef goto_functionst::goto_functiont goto_functiont;
@@ -126,6 +128,10 @@ protected:
   std::optional<exprt> static_parameter_coverage(
     const exprt &pointer,
     const exprt &access_size) const;
+
+  exprt static_array_exact_size_condition(
+    const exprt &pointer,
+    const exprt &byte_size) const;
 
   using guardt = std::function<exprt(exprt)>;
   const guardt identity = [](exprt expr) { return expr; };
@@ -321,6 +327,7 @@ protected:
   bool enable_assert_to_assume;
   bool enable_pointer_primitive_check;
   bool enable_static_array_dynamic_check;
+  bool enable_static_array_exact_size;
 
   /// Maps a named-check name to the corresponding boolean flag.
   std::map<irep_idt, bool *> name_to_flag{
@@ -1675,17 +1682,23 @@ std::optional<exprt> goto_check_ct::static_parameter_coverage(
 
   if(!base->has_symbolic_offset)
   {
-    if(
-      base->constant_offset < bytest{0} ||
-      base->constant_offset + bytest{*size} > region->second)
-    {
-      return {};
-    }
-    return true_exprt{};
+    const bool is_covered =
+      base->constant_offset >= bytest{0} &&
+      base->constant_offset + bytest{*size} <= region->second;
+    if(is_covered)
+      return true_exprt{};
+
+    return enable_static_array_exact_size
+             ? std::optional<exprt>{false_exprt{}}
+             : std::optional<exprt>{};
   }
 
-  if(!enable_static_array_dynamic_check)
+  if(
+    !enable_static_array_dynamic_check &&
+    !enable_static_array_exact_size)
+  {
     return {};
+  }
 
   const symbol_exprt base_pointer = ns.lookup(base->identifier).symbol_expr();
   const exprt pointer_offset_expr = pointer_offset(simplified_pointer);
@@ -1722,6 +1735,37 @@ std::optional<exprt> goto_check_ct::static_parameter_coverage(
       access_end, ID_le, from_integer(region->second.get(), wide_type)}};
 }
 
+exprt goto_check_ct::static_array_exact_size_condition(
+  const exprt &pointer,
+  const exprt &byte_size) const
+{
+  const exprt offset = pointer_offset(pointer);
+  const exprt size = object_size(pointer);
+  DATA_INVARIANT(
+    offset.type().id() == ID_signedbv || offset.type().id() == ID_unsignedbv,
+    "pointer offsets have bit-vector type");
+  DATA_INVARIANT(
+    size.type().id() == ID_signedbv || size.type().id() == ID_unsignedbv,
+    "object sizes have bit-vector type");
+  DATA_INVARIANT(
+    byte_size.type().id() == ID_signedbv ||
+      byte_size.type().id() == ID_unsignedbv,
+    "static array sizes have bit-vector type");
+
+  const std::size_t width =
+    std::max(
+      {to_bitvector_type(offset.type()).get_width(),
+       to_bitvector_type(size.type()).get_width(),
+       to_bitvector_type(byte_size.type()).get_width()}) +
+    1;
+  const unsignedbv_typet wide_type{width};
+  return equal_exprt{
+    plus_exprt{
+      typecast_exprt::conditional_cast(offset, wide_type),
+      typecast_exprt::conditional_cast(byte_size, wide_type)},
+    typecast_exprt::conditional_cast(size, wide_type)};
+}
+
 void goto_check_ct::pointer_validity_check(
   const dereference_exprt &expr,
   const exprt &src_expr,
@@ -1755,6 +1799,19 @@ void goto_check_ct::pointer_validity_check(
     *static_coverage = simplify_expr(*static_coverage, ns);
     if(*static_coverage == true)
       return;
+
+    if(enable_static_array_exact_size)
+    {
+      add_guarded_property(
+        std::move(*static_coverage),
+        "dereference failure: access is outside the exact static array size",
+        "pointer dereference",
+        true,
+        src_expr.find_source_location(),
+        src_expr,
+        guard);
+      return;
+    }
   }
 
   auto conditions = get_pointer_dereferenceable_conditions(pointer, size);
@@ -2669,10 +2726,13 @@ void goto_check_ct::check_static_array_parameters_at_entry(
   if(!enable_pointer_check)
     return;
 
-  static const std::string entry_check_comment =
-    "function parameter does not provide access to its static minimum";
+  const std::string entry_check_comment =
+    enable_static_array_exact_size
+      ? "function parameter does not have exactly its static array size remaining"
+      : "function parameter does not provide access to its static minimum";
 
-  const auto already_checked = [&goto_function](const irep_idt &identifier) {
+  const auto already_checked =
+    [&goto_function, &entry_check_comment](const irep_idt &identifier) {
     for(const auto &instruction : goto_function.body.instructions)
     {
       if(!instruction.is_assert())
@@ -2747,6 +2807,11 @@ void goto_check_ct::check_static_array_parameters_at_entry(
         get_pointer_dereferenceable_conditions(pointer, byte_size))
     {
       conditions.push_back(condition.assertion);
+    }
+    if(enable_static_array_exact_size)
+    {
+      conditions.push_back(
+        static_array_exact_size_condition(pointer, byte_size));
     }
 
     if(!conditions.empty())
@@ -2889,6 +2954,19 @@ void goto_check_ct::check_static_array_parameter_calls(
       add_guarded_property(
         condition.assertion,
         "function argument failure: " + condition.description,
+        "array parameter",
+        true,
+        instruction.source_location(),
+        argument,
+        identity);
+    }
+
+    if(enable_static_array_exact_size)
+    {
+      add_guarded_property(
+        static_array_exact_size_condition(argument, byte_size),
+        "function argument failure: static array does not have exactly the "
+        "declared size remaining",
         "array parameter",
         true,
         instruction.source_location(),

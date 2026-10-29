@@ -1,0 +1,11 @@
+CORE
+too_small.c
+--pointer-check --strict-static-array
+^EXIT=10$
+^SIGNAL=0$
+function argument failure: pointer outside object bounds.*: FAILURE$
+--
+^warning: ignoring
+--
+Checks that exact-size mode retains the ordinary caller checks and rejects an
+argument with fewer than N elements remaining.

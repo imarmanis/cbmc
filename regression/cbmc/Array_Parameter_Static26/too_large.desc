@@ -1,0 +1,11 @@
+CORE
+too_large.c
+--pointer-check --strict-static-array
+^EXIT=10$
+^SIGNAL=0$
+static array does not have exactly the declared size remaining.*: FAILURE$
+--
+^warning: ignoring
+--
+Checks that exact-size mode rejects an argument with more than N elements
+remaining even though it satisfies standard static-array semantics.

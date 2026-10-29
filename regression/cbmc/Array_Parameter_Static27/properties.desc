@@ -1,0 +1,12 @@
+CORE
+main.c
+--pointer-check --strict-static-array --show-properties
+^EXIT=0$
+^SIGNAL=0$
+^Property read_exact.pointer_dereference.1:$
+--
+^Property read_exact.pointer_dereference.[2-9][0-9]*:$
+^warning: ignoring
+--
+Checks that exact-size mode emits one dynamic range property instead of the
+ordinary decomposed pointer checks.

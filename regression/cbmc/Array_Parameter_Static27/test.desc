@@ -1,0 +1,11 @@
+CORE
+main.c
+--pointer-check --strict-static-array
+^EXIT=0$
+^SIGNAL=0$
+VERIFICATION SUCCESSFUL
+--
+^warning: ignoring
+--
+Checks that exact-size mode uses the exact static region for a bounded dynamic
+index without requiring the standard dynamic-check option.

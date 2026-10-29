@@ -45,7 +45,7 @@ void goto_check_c(
   "(pointer-overflow-check)(conversion-check)(undefined-shift-check)"          \
   "(float-overflow-check)(nan-check)(no-built-in-assertions)"                  \
   "(pointer-primitive-check)"                                                  \
-  "(static-array)"                                              \
+  "(static-array)(strict-static-array)"                                        \
   "(retain-trivial-checks)"                                                    \
   "(error-label):"                                                             \
   "(no-assertions)(no-assumptions)"                                            \
@@ -63,6 +63,8 @@ void goto_check_c(
   " {y--no-pointer-check} \t disable pointer checks\n"                         \
   " {y--static-array} \t use static array bounds in checks "    \
   "for dynamic pointer offsets\n"                                              \
+  " {y--strict-static-array} \t nonstandard: require exactly the static "  \
+  "array size to remain in the argument object\n"                              \
   " {y--memory-leak-check} \t enable memory leak checks\n"                     \
   " {y--memory-cleanup-check} \t enable memory cleanup checks\n"               \
   " {y--div-by-zero-check} \t "                                                \
@@ -125,6 +127,7 @@ void goto_check_c(
   options.set_option("assumptions", !cmdline.isset("no-assumptions")); /* NOLINT(whitespace/line_length) */ \
   options.set_option("assert-to-assume", cmdline.isset("assert-to-assume")); /* NOLINT(whitespace/line_length) */ \
   options.set_option("static-array", cmdline.isset("static-array")); /* NOLINT(whitespace/line_length) */ \
+  options.set_option("strict-static-array", cmdline.isset("strict-static-array")); /* NOLINT(whitespace/line_length) */ \
   options.set_option("retain-trivial", cmdline.isset("retain-trivial")); /* NOLINT(whitespace/line_length) */ \
   if(cmdline.isset("error-label")) \
     options.set_option("error-label", cmdline.get_values("error-label"));      \
