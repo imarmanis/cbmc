@@ -1,0 +1,11 @@
+CORE
+main.c
+--pointer-check
+^EXIT=10$
+^SIGNAL=0$
+dereference failure: deallocated dynamic object.*: FAILURE$
+--
+^warning: ignoring
+--
+Checks that direct writes to CBMC lifetime state prevent elimination of
+subsequent static-parameter dereference checks.

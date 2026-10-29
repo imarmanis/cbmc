@@ -1,0 +1,12 @@
+CORE
+main.c
+--pointer-check
+^EXIT=10$
+^SIGNAL=0$
+dereference failure: pointer outside object bounds.*: FAILURE$
+--
+function argument failure:.*: FAILURE$
+^warning: ignoring
+--
+Checks that reassigning a static array parameter prevents elimination of the
+subsequent dereference checks.

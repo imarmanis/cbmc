@@ -43,6 +43,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <langapi/mode.h>
 
 #include <algorithm>
+#include <map>
 
 class goto_check_ct
 {
@@ -101,6 +102,27 @@ protected:
   goto_programt::const_targett current_target;
   irep_idt current_function_identifier;
   messaget log;
+
+  // Accessible bytes guaranteed from unchanged static array parameters.
+  std::map<irep_idt, bytest> static_array_parameter_bytes;
+  bool model_has_threads = true;
+
+  void collect_static_array_parameters(
+    const symbolt &function_symbol,
+    const goto_functiont &goto_function);
+
+  struct static_parameter_pointert
+  {
+    irep_idt identifier;
+    bytest constant_offset;
+  };
+
+  std::optional<static_parameter_pointert>
+  get_static_parameter_pointer(const exprt &pointer) const;
+
+  bool static_parameter_covers(
+    const exprt &pointer,
+    const exprt &access_size) const;
 
   using guardt = std::function<exprt(exprt)>;
   const guardt identity = [](exprt expr) { return expr; };
@@ -449,10 +471,14 @@ static exprt implication(exprt lhs, exprt rhs)
 
 void goto_check_ct::collect_allocations(const goto_functionst &goto_functions)
 {
+  model_has_threads = false;
   for(const auto &gf_entry : goto_functions.function_map)
   {
     for(const auto &instruction : gf_entry.second.body.instructions)
     {
+      if(instruction.is_start_thread())
+        model_has_threads = true;
+
       if(!instruction.is_function_call())
         continue;
 
@@ -1457,6 +1483,190 @@ void goto_check_ct::pointer_overflow_check(
   }
 }
 
+void goto_check_ct::collect_static_array_parameters(
+  const symbolt &function_symbol,
+  const goto_functiont &goto_function)
+{
+  static_array_parameter_bytes.clear();
+
+  if(!enable_pointer_check)
+    return;
+
+  // Calls can end the lifetime of an argument object, and another thread can
+  // do so concurrently. Keep the ordinary checks in either case.
+  if(model_has_threads ||
+     std::any_of(
+       goto_function.body.instructions.begin(),
+       goto_function.body.instructions.end(),
+       [](const goto_programt::instructiont &instruction) {
+         if(instruction.is_function_call())
+         {
+           const exprt &function = instruction.call_function();
+           if(
+             function.id() == ID_symbol &&
+             to_symbol_expr(function).identifier() ==
+               CPROVER_PREFIX "contracts_write_set_check_assignment")
+           {
+             return false;
+           }
+           return true;
+         }
+
+         if(instruction.is_other())
+           return true;
+
+         return instruction.is_assign() &&
+                instruction.assign_lhs().id() == ID_symbol &&
+                to_symbol_expr(instruction.assign_lhs())
+                  .identifier()
+                  .starts_with(CPROVER_PREFIX);
+       }))
+  {
+    return;
+  }
+
+  const auto &parameters = to_code_type(function_symbol.type).parameters();
+  for(const auto &parameter : parameters)
+  {
+    const typet &parameter_type = parameter.type();
+    const irept &static_size_irep =
+      parameter_type.find(ID_C_static_array_size);
+    if(
+      parameter.get_identifier().empty() || static_size_irep.is_nil() ||
+      parameter_type.id() != ID_pointer ||
+      parameter_type.get_bool(ID_C_volatile))
+    {
+      continue;
+    }
+
+    const symbol_exprt parameter_expr{
+      parameter.get_identifier(), parameter_type};
+    if(local_bitvector_analysis->dirty(parameter_expr))
+      continue;
+
+    const bool is_assigned = std::any_of(
+      goto_function.body.instructions.begin(),
+      goto_function.body.instructions.end(),
+      [&parameter](const goto_programt::instructiont &instruction) {
+        return instruction.is_assign() &&
+               instruction.assign_lhs().id() == ID_symbol &&
+               to_symbol_expr(instruction.assign_lhs()).identifier() ==
+                 parameter.get_identifier();
+      });
+    if(is_assigned)
+      continue;
+
+    const exprt element_count = simplify_expr(
+      static_cast<const exprt &>(static_size_irep), ns);
+    const auto count = numeric_cast<mp_integer>(element_count);
+    const auto element_size =
+      pointer_offset_size(to_pointer_type(parameter_type).base_type(), ns);
+    if(
+      count.has_value() && *count > 0 && element_size.has_value() &&
+      *element_size > bytest{0})
+    {
+      static_array_parameter_bytes.emplace(
+        parameter.get_identifier(), *count * *element_size);
+    }
+  }
+}
+
+std::optional<goto_check_ct::static_parameter_pointert>
+goto_check_ct::get_static_parameter_pointer(const exprt &pointer) const
+{
+  if(pointer.id() == ID_symbol)
+  {
+    const irep_idt &identifier = to_symbol_expr(pointer).identifier();
+    if(static_array_parameter_bytes.find(identifier) !=
+       static_array_parameter_bytes.end())
+    {
+      return static_parameter_pointert{identifier, bytest{0}};
+    }
+    return {};
+  }
+
+  if(
+    pointer.id() == ID_typecast && pointer.operands().size() == 1 &&
+    to_typecast_expr(pointer).op().type().id() == ID_pointer)
+  {
+    return get_static_parameter_pointer(to_typecast_expr(pointer).op());
+  }
+
+  if(pointer.id() == ID_plus)
+  {
+    const exprt *pointer_operand = nullptr;
+    mp_integer constant_index = 0;
+    for(const auto &operand : pointer.operands())
+    {
+      if(operand.type().id() == ID_pointer)
+      {
+        if(pointer_operand != nullptr)
+          return {};
+        pointer_operand = &operand;
+      }
+      else
+      {
+        const auto index =
+          numeric_cast<mp_integer>(simplify_expr(operand, ns));
+        if(!index.has_value())
+          return {};
+        constant_index += *index;
+      }
+    }
+
+    if(pointer_operand == nullptr)
+      return {};
+
+    const auto element_size = pointer_offset_size(
+      to_pointer_type(pointer_operand->type()).base_type(), ns);
+    auto base = get_static_parameter_pointer(*pointer_operand);
+    if(!element_size.has_value() || !base.has_value())
+      return {};
+
+    base->constant_offset += constant_index * *element_size;
+    return base;
+  }
+
+  if(
+    pointer.id() == ID_minus && pointer.operands().size() == 2 &&
+    pointer.operands()[0].type().id() == ID_pointer)
+  {
+    const exprt &pointer_operand = pointer.operands()[0];
+    const auto index =
+      numeric_cast<mp_integer>(simplify_expr(pointer.operands()[1], ns));
+    const auto element_size = pointer_offset_size(
+      to_pointer_type(pointer_operand.type()).base_type(), ns);
+    auto base = get_static_parameter_pointer(pointer_operand);
+    if(!index.has_value() || !element_size.has_value() || !base.has_value())
+      return {};
+
+    base->constant_offset -= *index * *element_size;
+    return base;
+  }
+
+  return {};
+}
+
+bool goto_check_ct::static_parameter_covers(
+  const exprt &pointer,
+  const exprt &access_size) const
+{
+  const auto base =
+    get_static_parameter_pointer(simplify_expr(pointer, ns));
+  const auto size =
+    numeric_cast<mp_integer>(simplify_expr(access_size, ns));
+  if(!base.has_value() || !size.has_value() || *size < 0)
+    return false;
+
+  const auto region = static_array_parameter_bytes.find(base->identifier);
+  INVARIANT(
+    region != static_array_parameter_bytes.end(),
+    "a recognized static array parameter has a recorded region size");
+
+  return base->constant_offset >= bytest{0} &&
+         base->constant_offset + bytest{*size} <= region->second;
+}
+
 void goto_check_ct::pointer_validity_check(
   const dereference_exprt &expr,
   const exprt &src_expr,
@@ -1483,6 +1693,9 @@ void goto_check_ct::pointer_validity_check(
     CHECK_RETURN(size_of_expr_opt.has_value());
     size = size_of_expr_opt.value();
   }
+
+  if(static_parameter_covers(pointer, size))
+    return;
 
   auto conditions = get_pointer_dereferenceable_conditions(pointer, size);
 
@@ -2151,6 +2364,8 @@ void goto_check_ct::goto_check(
     function_entry_code.destructive_append(new_code);
     assertions.clear();
   }
+
+  collect_static_array_parameters(function_symbol, goto_function);
 
   Forall_goto_program_instructions(it, goto_program)
   {

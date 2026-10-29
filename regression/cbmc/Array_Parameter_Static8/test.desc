@@ -1,0 +1,12 @@
+CORE
+main.c
+--pointer-check --no-malloc-may-fail
+^EXIT=10$
+^SIGNAL=0$
+dereference failure: deallocated dynamic object.*: FAILURE$
+--
+function argument failure:.*: FAILURE$
+^warning: ignoring
+--
+Checks that a call which can end the argument object's lifetime prevents
+elimination of subsequent dereference checks.
