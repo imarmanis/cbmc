@@ -1,0 +1,12 @@
+CORE
+main.c
+
+^EXIT=(64|1)$
+^SIGNAL=0$
+'x' is constant
+^CONVERSION ERROR$
+--
+^warning: ignoring
+--
+Checks that const inside a static array parameter declarator makes the adjusted
+pointer itself const, so assigning another pointer to the parameter is rejected.

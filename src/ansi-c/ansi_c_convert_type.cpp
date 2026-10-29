@@ -692,6 +692,12 @@ void ansi_c_convert_typet::set_attributes(typet &type) const
 
   if(type.id() == ID_array)
   {
+    // C11 6.7.6.3p7: record the static keyword from within array brackets
+    // on the array type so that adjust_function_parameter can transfer it
+    // to the adjusted pointer type.
+    if(c_storage_spec.is_static)
+      type.set(ID_C_array_size_static, true);
+
     // An array type can only be combined with qualifiers in this way via
     // the array declarator syntax `T x[const N]`. C11 6.7.6.3p7: those
     // qualifiers belong to the pointer that a parameter of this type is
