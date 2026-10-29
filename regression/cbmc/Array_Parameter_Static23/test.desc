@@ -1,0 +1,11 @@
+CORE
+main.c
+--pointer-check --static-array
+^EXIT=10$
+^SIGNAL=0$
+access is outside the static parameter minimum and is not otherwise valid.*: FAILURE$
+--
+^warning: ignoring
+--
+Checks that the symbolic residual still rejects an access outside both the
+static minimum and the actual object.

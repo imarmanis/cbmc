@@ -81,6 +81,8 @@ public:
     error_labels = _options.get_list_option("error-label");
     enable_pointer_primitive_check =
       _options.get_bool_option("pointer-primitive-check");
+    enable_static_array_dynamic_check =
+      _options.get_bool_option("static-array");
   }
 
   typedef goto_functionst::goto_functiont goto_functiont;
@@ -115,12 +117,13 @@ protected:
   {
     irep_idt identifier;
     bytest constant_offset;
+    bool has_symbolic_offset;
   };
 
   std::optional<static_parameter_pointert>
   get_static_parameter_pointer(const exprt &pointer) const;
 
-  bool static_parameter_covers(
+  std::optional<exprt> static_parameter_coverage(
     const exprt &pointer,
     const exprt &access_size) const;
 
@@ -317,6 +320,7 @@ protected:
   bool retain_trivial;
   bool enable_assert_to_assume;
   bool enable_pointer_primitive_check;
+  bool enable_static_array_dynamic_check;
 
   /// Maps a named-check name to the corresponding boolean flag.
   std::map<irep_idt, bool *> name_to_flag{
@@ -1580,7 +1584,7 @@ goto_check_ct::get_static_parameter_pointer(const exprt &pointer) const
     if(static_array_parameter_bytes.find(identifier) !=
        static_array_parameter_bytes.end())
     {
-      return static_parameter_pointert{identifier, bytest{0}};
+      return static_parameter_pointert{identifier, bytest{0}, false};
     }
     return {};
   }
@@ -1596,6 +1600,7 @@ goto_check_ct::get_static_parameter_pointer(const exprt &pointer) const
   {
     const exprt *pointer_operand = nullptr;
     mp_integer constant_index = 0;
+    bool has_symbolic_index = false;
     for(const auto &operand : pointer.operands())
     {
       if(operand.type().id() == ID_pointer)
@@ -1608,9 +1613,10 @@ goto_check_ct::get_static_parameter_pointer(const exprt &pointer) const
       {
         const auto index =
           numeric_cast<mp_integer>(simplify_expr(operand, ns));
-        if(!index.has_value())
-          return {};
-        constant_index += *index;
+        if(index.has_value())
+          constant_index += *index;
+        else
+          has_symbolic_index = true;
       }
     }
 
@@ -1624,6 +1630,7 @@ goto_check_ct::get_static_parameter_pointer(const exprt &pointer) const
       return {};
 
     base->constant_offset += constant_index * *element_size;
+    base->has_symbolic_offset |= has_symbolic_index;
     return base;
   }
 
@@ -1637,34 +1644,82 @@ goto_check_ct::get_static_parameter_pointer(const exprt &pointer) const
     const auto element_size = pointer_offset_size(
       to_pointer_type(pointer_operand.type()).base_type(), ns);
     auto base = get_static_parameter_pointer(pointer_operand);
-    if(!index.has_value() || !element_size.has_value() || !base.has_value())
+    if(!element_size.has_value() || !base.has_value())
       return {};
 
-    base->constant_offset -= *index * *element_size;
+    if(index.has_value())
+      base->constant_offset -= *index * *element_size;
+    else
+      base->has_symbolic_offset = true;
     return base;
   }
 
   return {};
 }
 
-bool goto_check_ct::static_parameter_covers(
+std::optional<exprt> goto_check_ct::static_parameter_coverage(
   const exprt &pointer,
   const exprt &access_size) const
 {
-  const auto base =
-    get_static_parameter_pointer(simplify_expr(pointer, ns));
+  const exprt simplified_pointer = simplify_expr(pointer, ns);
+  const auto base = get_static_parameter_pointer(simplified_pointer);
   const auto size =
     numeric_cast<mp_integer>(simplify_expr(access_size, ns));
   if(!base.has_value() || !size.has_value() || *size < 0)
-    return false;
+    return {};
 
   const auto region = static_array_parameter_bytes.find(base->identifier);
   INVARIANT(
     region != static_array_parameter_bytes.end(),
     "a recognized static array parameter has a recorded region size");
 
-  return base->constant_offset >= bytest{0} &&
-         base->constant_offset + bytest{*size} <= region->second;
+  if(!base->has_symbolic_offset)
+  {
+    if(
+      base->constant_offset < bytest{0} ||
+      base->constant_offset + bytest{*size} > region->second)
+    {
+      return {};
+    }
+    return true_exprt{};
+  }
+
+  if(!enable_static_array_dynamic_check)
+    return {};
+
+  const symbol_exprt base_pointer = ns.lookup(base->identifier).symbol_expr();
+  const exprt pointer_offset_expr = pointer_offset(simplified_pointer);
+  const exprt base_offset_expr = pointer_offset(base_pointer);
+  DATA_INVARIANT(
+    pointer_offset_expr.type().id() == ID_signedbv ||
+      pointer_offset_expr.type().id() == ID_unsignedbv,
+    "pointer offsets have bit-vector type");
+  DATA_INVARIANT(
+    access_size.type().id() == ID_signedbv ||
+      access_size.type().id() == ID_unsignedbv,
+    "access sizes have bit-vector type");
+
+  const std::size_t width =
+    std::max(
+      to_bitvector_type(pointer_offset_expr.type()).get_width(),
+      to_bitvector_type(access_size.type()).get_width()) +
+    2;
+  const signedbv_typet wide_type{width};
+  if(region->second.get() > power(2, width - 1) - 1)
+    return {};
+
+  const minus_exprt relative_offset{
+    typecast_exprt::conditional_cast(pointer_offset_expr, wide_type),
+    typecast_exprt::conditional_cast(base_offset_expr, wide_type)};
+  const plus_exprt access_end{
+    relative_offset, from_integer(*size, wide_type)};
+
+  return and_exprt{
+    same_object(simplified_pointer, base_pointer),
+    binary_relation_exprt{
+      relative_offset, ID_ge, from_integer(0, wide_type)},
+    binary_relation_exprt{
+      access_end, ID_le, from_integer(region->second.get(), wide_type)}};
 }
 
 void goto_check_ct::pointer_validity_check(
@@ -1694,10 +1749,34 @@ void goto_check_ct::pointer_validity_check(
     size = size_of_expr_opt.value();
   }
 
-  if(static_parameter_covers(pointer, size))
-    return;
+  auto static_coverage = static_parameter_coverage(pointer, size);
+  if(static_coverage.has_value())
+  {
+    *static_coverage = simplify_expr(*static_coverage, ns);
+    if(*static_coverage == true)
+      return;
+  }
 
   auto conditions = get_pointer_dereferenceable_conditions(pointer, size);
+
+  if(static_coverage.has_value())
+  {
+    exprt::operandst original_conditions;
+    for(const auto &condition : conditions)
+      original_conditions.push_back(condition.assertion);
+
+    add_guarded_property(
+      or_exprt{
+        std::move(*static_coverage), conjunction(original_conditions)},
+      "dereference failure: access is outside the static parameter minimum "
+      "and is not otherwise valid",
+      "pointer dereference",
+      true,
+      src_expr.find_source_location(),
+      src_expr,
+      guard);
+    return;
+  }
 
   for(const auto &c : conditions)
   {

@@ -1,0 +1,11 @@
+CORE
+main.c
+--pointer-check --static-array
+^EXIT=0$
+^SIGNAL=0$
+VERIFICATION SUCCESSFUL
+--
+^warning: ignoring
+--
+Checks that static N remains a minimum: an access beyond N is accepted when
+the actual argument points to a larger object.

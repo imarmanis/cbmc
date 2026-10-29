@@ -1,0 +1,14 @@
+CORE
+main.c
+--pointer-check --static-array --show-properties
+^EXIT=0$
+^SIGNAL=0$
+^Property read_static.pointer_dereference.1:$
+^Property read_plain.pointer_dereference.[2-9][0-9]*:$
+--
+^Property read_static.pointer_dereference.[2-9][0-9]*:$
+^warning: ignoring
+--
+Checks that equivalent symbolic accesses produce one pointer property with
+[static N], but multiple properties without the static-region fact. The plain
+case is deliberately not pinned to an exact property count.
