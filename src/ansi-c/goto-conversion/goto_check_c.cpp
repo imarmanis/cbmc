@@ -28,9 +28,11 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <util/pointer_expr.h>
 #include <util/pointer_offset_size.h>
 #include <util/pointer_predicates.h>
+#include <util/replace_symbol.h>
 #include <util/simplify_expr.h>
 #include <util/std_code.h>
 #include <util/std_expr.h>
+#include <util/suffix.h>
 
 #include <goto-programs/goto_model.h>
 #include <goto-programs/remove_skip.h>
@@ -97,12 +99,24 @@ protected:
   const namespacet &ns;
   std::unique_ptr<local_bitvector_analysist> local_bitvector_analysis;
   goto_programt::const_targett current_target;
+  irep_idt current_function_identifier;
   messaget log;
 
   using guardt = std::function<exprt(exprt)>;
   const guardt identity = [](exprt expr) { return expr; };
 
   void check_shadow_memory_api_calls(const goto_programt::instructiont &);
+
+  /// Check that arguments passed to array parameters declared with `static N`
+  /// provide access to at least N elements.
+  void check_static_array_parameter_calls(
+    const goto_programt::instructiont &instruction);
+
+  /// Check the static minimum at function entry to cover calls made through a
+  /// declaration or function-pointer type that does not carry `static N`.
+  void check_static_array_parameters_at_entry(
+    const symbolt &function_symbol,
+    const goto_functiont &goto_function);
 
   /// Check an address-of expression:
   ///  if it is a dereference then check the pointer
@@ -2114,6 +2128,7 @@ void goto_check_ct::goto_check(
   goto_functiont &goto_function)
 {
   const auto &function_symbol = ns.lookup(function_identifier);
+  current_function_identifier = function_identifier;
   mode = function_symbol.mode;
 
   if(mode != ID_C && mode != ID_cpp)
@@ -2123,10 +2138,19 @@ void goto_check_ct::goto_check(
 
   bool did_something = false;
 
+  goto_programt &goto_program = goto_function.body;
   local_bitvector_analysis =
     std::make_unique<local_bitvector_analysist>(goto_function, ns);
 
-  goto_programt &goto_program = goto_function.body;
+  goto_programt function_entry_code;
+  if(!goto_program.instructions.empty())
+  {
+    current_target = goto_program.instructions.begin();
+    new_code.clear();
+    check_static_array_parameters_at_entry(function_symbol, goto_function);
+    function_entry_code.destructive_append(new_code);
+    assertions.clear();
+  }
 
   Forall_goto_program_instructions(it, goto_program)
   {
@@ -2233,6 +2257,7 @@ void goto_check_ct::goto_check(
       for(const auto &arg : i.call_arguments())
         check(arg, false);
 
+      check_static_array_parameter_calls(i);
       check_shadow_memory_api_calls(i);
 
       // the call might invalidate any assertion
@@ -2332,8 +2357,251 @@ void goto_check_ct::goto_check(
     }
   }
 
+  if(!function_entry_code.instructions.empty())
+  {
+    goto_program.destructive_insert(
+      goto_program.instructions.begin(), function_entry_code);
+    did_something = true;
+  }
+
   if(did_something)
     remove_skip(goto_program);
+}
+
+void goto_check_ct::check_static_array_parameters_at_entry(
+  const symbolt &function_symbol,
+  const goto_functiont &goto_function)
+{
+  if(!enable_pointer_check)
+    return;
+
+  static const std::string entry_check_comment =
+    "function parameter does not provide access to its static minimum";
+
+  const auto already_checked = [&goto_function](const irep_idt &identifier) {
+    for(const auto &instruction : goto_function.body.instructions)
+    {
+      if(!instruction.is_assert())
+        return false;
+
+      const std::string comment =
+        id2string(instruction.source_location().get_comment());
+      if(
+        instruction.source_location().get_property_class() !=
+          "array parameter" ||
+        comment.compare(0, entry_check_comment.size(), entry_check_comment) !=
+          0)
+      {
+        return false;
+      }
+
+      if(has_symbol_expr(instruction.condition(), identifier, true))
+        return true;
+    }
+    return false;
+  };
+
+  for(const auto &parameter :
+      to_code_type(function_symbol.type).parameters())
+  {
+    const typet &parameter_type = parameter.type();
+    const irept &static_size_irep =
+      parameter_type.find(ID_C_static_array_size);
+    if(
+      parameter.get_identifier().empty() || static_size_irep.is_nil() ||
+      parameter_type.id() != ID_pointer)
+    {
+      continue;
+    }
+
+    if(already_checked(parameter.get_identifier()))
+      continue;
+
+    const exprt element_count = simplify_expr(
+      static_cast<const exprt &>(static_size_irep), ns);
+    const auto count = numeric_cast<mp_integer>(element_count);
+    if(
+      (current_function_identifier == goto_functionst::entry_point() &&
+       !count.has_value()) ||
+      (count.has_value() && *count <= 0))
+    {
+      continue;
+    }
+
+    const auto element_size =
+      size_of_expr(to_pointer_type(parameter_type).base_type(), ns);
+    CHECK_RETURN(element_size.has_value());
+
+    const exprt element_count_for_size =
+      typecast_exprt::conditional_cast(element_count, element_size->type());
+    const exprt byte_size =
+      mult_exprt{element_count_for_size, *element_size};
+    const symbol_exprt pointer{
+      parameter.get_identifier(), parameter_type};
+
+    exprt::operandst conditions;
+    if(!count.has_value())
+    {
+      conditions.push_back(binary_relation_exprt{
+        element_count,
+        ID_gt,
+        from_integer(0, element_count.type())});
+    }
+    conditions.push_back(not_exprt{
+      mult_overflow_exprt{element_count_for_size, *element_size}});
+    for(const auto &condition :
+        get_pointer_dereferenceable_conditions(pointer, byte_size))
+    {
+      conditions.push_back(condition.assertion);
+    }
+
+    if(!conditions.empty())
+    {
+      source_locationt entry_location = parameter.source_location();
+      if(entry_location.get_function().empty())
+        entry_location.set_function(function_symbol.name);
+      if(entry_location.get_file().empty())
+        entry_location.set_file(function_symbol.location.get_file());
+
+      add_guarded_property(
+        conjunction(conditions),
+        entry_check_comment,
+        "array parameter",
+        true,
+        entry_location,
+        pointer,
+        identity);
+    }
+  }
+}
+
+void goto_check_ct::check_static_array_parameter_calls(
+  const goto_programt::instructiont &instruction)
+{
+  if(!enable_pointer_check || instruction.call_function().type().id() != ID_code)
+    return;
+
+  const auto &parameters =
+    to_code_type(instruction.call_function().type()).parameters();
+  const auto &arguments = instruction.call_arguments();
+
+  replace_symbolt actuals;
+  for(std::size_t index = 0;
+      index < parameters.size() && index < arguments.size();
+      ++index)
+  {
+    const auto &parameter = parameters[index];
+    if(!parameter.get_identifier().empty())
+    {
+      actuals.insert(
+        symbol_exprt(parameter.get_identifier(), parameter.type()),
+        typecast_exprt::conditional_cast(arguments[index], parameter.type()));
+    }
+  }
+
+  for(std::size_t index = 0;
+      index < parameters.size() && index < arguments.size();
+      ++index)
+  {
+    const typet &parameter_type = parameters[index].type();
+    const irept &static_size_irep =
+      parameter_type.find(ID_C_static_array_size);
+    if(static_size_irep.is_nil())
+      continue;
+
+    DATA_INVARIANT(
+      parameter_type.id() == ID_pointer,
+      "a static array parameter is adjusted to a pointer");
+
+    exprt element_count = static_cast<const exprt &>(static_size_irep);
+
+    const auto bound_symbols = find_symbols(element_count);
+    for(std::size_t parameter_index = 0;
+        parameter_index < index && parameter_index < arguments.size();
+        ++parameter_index)
+    {
+      const auto &bound_parameter = parameters[parameter_index];
+      if(
+        !bound_parameter.get_identifier().empty() ||
+        bound_parameter.get_base_name().empty())
+      {
+        continue;
+      }
+
+      const std::string suffix =
+        "::" + id2string(bound_parameter.get_base_name());
+      for(const auto &bound_symbol : bound_symbols)
+      {
+        if(has_suffix(id2string(bound_symbol.identifier()), suffix))
+        {
+          actuals.insert(
+            bound_symbol,
+            typecast_exprt::conditional_cast(
+              arguments[parameter_index], bound_symbol.type()));
+        }
+      }
+    }
+
+    actuals.replace(element_count);
+
+    const exprt simplified_element_count = simplify_expr(element_count, ns);
+    const auto constant_element_count =
+      numeric_cast<mp_integer>(simplified_element_count);
+    if(
+      (current_function_identifier == goto_functionst::entry_point() &&
+       !constant_element_count.has_value()) ||
+      (constant_element_count.has_value() && *constant_element_count <= 0))
+    {
+      continue;
+    }
+
+    const auto element_size =
+      size_of_expr(to_pointer_type(parameter_type).base_type(), ns);
+    CHECK_RETURN(element_size.has_value());
+
+    const exprt element_count_for_size =
+      typecast_exprt::conditional_cast(element_count, element_size->type());
+    const exprt byte_size =
+      mult_exprt{element_count_for_size, *element_size};
+
+    const exprt &argument = arguments[index];
+    if(!constant_element_count.has_value())
+    {
+      add_guarded_property(
+        binary_relation_exprt{
+          element_count,
+          ID_gt,
+          from_integer(0, element_count.type())},
+        "function argument failure: static array size is not positive",
+        "array parameter",
+        true,
+        instruction.source_location(),
+        argument,
+        identity);
+    }
+    add_guarded_property(
+      not_exprt{
+        mult_overflow_exprt{element_count_for_size, *element_size}},
+      "function argument failure: static array byte size overflows",
+      "array parameter",
+      true,
+      instruction.source_location(),
+      argument,
+      identity);
+
+    for(const auto &condition :
+        get_pointer_dereferenceable_conditions(argument, byte_size))
+    {
+      add_guarded_property(
+        condition.assertion,
+        "function argument failure: " + condition.description,
+        "array parameter",
+        true,
+        instruction.source_location(),
+        argument,
+        identity);
+    }
+  }
 }
 
 void goto_check_ct::check_shadow_memory_api_calls(

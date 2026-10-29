@@ -1,0 +1,11 @@
+CORE
+minimum.c
+--pointer-check
+^EXIT=10$
+^SIGNAL=0$
+function parameter does not provide access to its static minimum.*: FAILURE$
+--
+^warning: ignoring
+--
+Checks a runtime static bound at function entry when a function-pointer call
+type does not carry the array parameter metadata.

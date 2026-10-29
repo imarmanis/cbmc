@@ -1,0 +1,12 @@
+CORE
+main.c
+--pointer-check
+^EXIT=0$
+^SIGNAL=0$
+VERIFICATION SUCCESSFUL
+--
+^warning: ignoring
+INVARIANT
+--
+Checks positional substitution of a runtime static bound for a valid
+prototype-first call.

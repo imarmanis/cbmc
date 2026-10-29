@@ -1,0 +1,11 @@
+CORE
+main.c
+--pointer-check
+^EXIT=10$
+^SIGNAL=0$
+^\[main.array_parameter.\d+\] line \d+ function argument failure: pointer outside object bounds in .*: FAILURE$
+--
+^warning: ignoring
+--
+Checks that a runtime static bound is replaced by the corresponding actual
+argument before the call-site validity check is generated.

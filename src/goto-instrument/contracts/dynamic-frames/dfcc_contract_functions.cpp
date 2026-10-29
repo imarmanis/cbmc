@@ -16,6 +16,24 @@ Date: August 2022
 #include "dfcc_spec_functions.h"
 #include "dfcc_utils.h"
 
+static void remove_static_array_bounds_from_spec_function(
+  goto_modelt &goto_model,
+  const irep_idt &function_id)
+{
+  symbolt &function_symbol =
+    goto_model.symbol_table.get_writeable_ref(function_id);
+  for(auto &parameter : to_code_type(function_symbol.type).parameters())
+  {
+    parameter.type().remove(ID_C_static_array_size);
+    if(!parameter.get_identifier().empty())
+    {
+      goto_model.symbol_table
+        .get_writeable_ref(parameter.get_identifier())
+        .type.remove(ID_C_static_array_size);
+    }
+  }
+}
+
 dfcc_contract_functionst::dfcc_contract_functionst(
   const symbolt &pure_contract_symbol,
   goto_modelt &goto_model,
@@ -113,6 +131,8 @@ void dfcc_contract_functionst::gen_spec_assigns_function()
     empty_typet());
 
   const auto &spec_function_id = spec_function_symbol.name;
+  remove_static_array_bounds_from_spec_function(
+    goto_model, spec_function_id);
 
   auto &spec_code_type = to_code_type(spec_function_symbol.type);
 
@@ -165,6 +185,8 @@ void dfcc_contract_functionst::gen_spec_frees_function()
     empty_typet());
 
   const auto &spec_function_id = spec_function_symbol.name;
+  remove_static_array_bounds_from_spec_function(
+    goto_model, spec_function_id);
 
   auto &spec_code_type = to_code_type(spec_function_symbol.type);
 

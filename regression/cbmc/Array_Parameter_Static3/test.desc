@@ -1,0 +1,10 @@
+CORE
+main.c
+--pointer-check
+^EXIT=10$
+^SIGNAL=0$
+^\[main.array_parameter.\d+\] line \d+ function argument failure: pointer NULL in .*: FAILURE$
+--
+^warning: ignoring
+--
+Checks that null violates a static array parameter's positive minimum size.

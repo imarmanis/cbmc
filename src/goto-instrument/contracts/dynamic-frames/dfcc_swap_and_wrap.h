@@ -41,6 +41,7 @@ class dfcc_swap_and_wrapt
 public:
   dfcc_swap_and_wrapt(
     goto_modelt &goto_model,
+    const irep_idt &harness_id,
     message_handlert &message_handler,
     dfcc_libraryt &library,
     dfcc_instrumentt &instrument,
@@ -82,6 +83,7 @@ public:
 
 protected:
   goto_modelt &goto_model;
+  const irep_idt harness_id;
   message_handlert &message_handler;
   messaget log;
   dfcc_libraryt &library;

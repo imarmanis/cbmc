@@ -1,0 +1,11 @@
+CORE
+main.c
+--pointer-check
+^EXIT=10$
+^SIGNAL=0$
+^\[main.array_parameter.\d+\] line \d+ function argument failure: pointer outside object bounds in .*: FAILURE$
+--
+^warning: ignoring
+--
+Checks that an argument shorter than the static minimum is rejected at the
+call, even when the called function does not dereference it.

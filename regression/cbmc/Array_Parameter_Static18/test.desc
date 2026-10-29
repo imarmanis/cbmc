@@ -1,0 +1,11 @@
+CORE
+main.c
+--pointer-check
+^EXIT=10$
+^SIGNAL=0$
+^\[write_last.array_parameter.\d+\].*: FAILURE$
+--
+^warning: ignoring
+--
+Checks that repeated-pass detection requires the generated property class and
+cannot be spoofed by a user assertion with the same text.
