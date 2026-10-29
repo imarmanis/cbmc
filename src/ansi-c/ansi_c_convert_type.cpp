@@ -690,9 +690,21 @@ void ansi_c_convert_typet::set_attributes(typet &type) const
   if(aligned)
     type.set(ID_C_alignment, alignment);
 
-  // C11 6.7.6.3p7: record the static keyword from within array brackets
-  // on the array type so that adjust_function_parameter can transfer it
-  // to the adjusted pointer type.
-  if(c_storage_spec.is_static && type.id() == ID_array)
-    type.set(ID_C_array_size_static, true);
+  if(type.id() == ID_array)
+  {
+    // An array type can only be combined with qualifiers in this way via
+    // the array declarator syntax `T x[const N]`. C11 6.7.6.3p7: those
+    // qualifiers belong to the pointer that a parameter of this type is
+    // adjusted to. Record them separately, because qualifiers on the array
+    // type itself cannot be told apart from those of a qualified typedef'd
+    // array type (`const A x`), which C11 6.7.3p9 applies to the element
+    // type instead.
+    typet array_declarator_qualifiers;
+    c_qualifiers.write(array_declarator_qualifiers);
+    if(!array_declarator_qualifiers.get_named_sub().empty())
+    {
+      type.add(ID_C_array_declarator_qualifiers) =
+        std::move(array_declarator_qualifiers);
+    }
+  }
 }

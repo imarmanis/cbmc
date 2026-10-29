@@ -1,0 +1,13 @@
+CORE
+main.c
+
+^EXIT=0$
+^SIGNAL=0$
+--
+^warning: ignoring
+^CONVERSION ERROR$
+--
+Qualified parameter declarations that must be accepted: a qualified
+typedef'd array type `const A x`, whose qualifier applies to the element
+type (C11 6.7.3p9), and declarations and definitions that differ only in
+the qualifiers of the adjusted pointer.
