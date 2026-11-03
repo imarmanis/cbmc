@@ -1,0 +1,10 @@
+CORE
+main.c
+--pointer-check
+^EXIT=10$
+^SIGNAL=0$
+function argument failure: pointer outside object bounds.*: FAILURE$
+--
+^warning: ignoring
+--
+Checks that runtime inner dimensions contribute to the caller-side extent.
