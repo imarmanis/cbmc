@@ -1,0 +1,14 @@
+CORE
+main.c
+--pointer-check --static-array --show-properties
+^EXIT=0$
+^SIGNAL=0$
+^Property read_dynamic.pointer_dereference.1:$
+access is outside the static parameter minimum and is not otherwise valid
+--
+^Property read_known.pointer_dereference.
+^Property read_dynamic.pointer_dereference.2:$
+^warning: ignoring
+--
+Shows that --static-array combines dynamic coverage with the ordinary checks in
+one residual property; fewer properties do not guarantee faster solving.
