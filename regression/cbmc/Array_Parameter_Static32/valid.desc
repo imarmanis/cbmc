@@ -1,0 +1,10 @@
+CORE
+main.c
+-DVALID_EXTENT --pointer-check
+^EXIT=0$
+^SIGNAL=0$
+VERIFICATION SUCCESSFUL
+--
+^warning: ignoring
+--
+Checks caller and entry extents for a runtime multidimensional array bound.

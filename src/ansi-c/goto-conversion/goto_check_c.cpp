@@ -149,6 +149,18 @@ protected:
     const exprt &pointer,
     const exprt &access_size) const;
 
+  /// Replace auxiliary array-size symbols with their defining expressions.
+  /// \param size: Size expression to expand.
+  /// \return The expanded and simplified expression.
+  exprt expand_static_array_size(exprt size) const;
+
+  /// Add no-overflow conditions for multiplications introduced by `sizeof`.
+  /// \param size: Element-size expression to inspect.
+  /// \param [out] conditions: Conditions to append to.
+  void add_static_array_size_overflow_conditions(
+    const exprt &size,
+    exprt::operandst &conditions) const;
+
   /// Build the condition that exactly \p byte_size bytes remain in the object
   /// referred to by \p pointer.
   exprt static_array_exact_size_condition(
@@ -1841,6 +1853,52 @@ std::optional<exprt> goto_check_ct::static_parameter_coverage(
       access_end, ID_le, from_integer(region->second.get(), wide_type)}};
 }
 
+exprt goto_check_ct::expand_static_array_size(exprt size) const
+{
+  std::set<irep_idt> expanded_symbols;
+  while(true)
+  {
+    replace_symbolt replacements;
+    for(const auto &symbol_expr : find_symbols(size))
+    {
+      if(!expanded_symbols.insert(symbol_expr.get_identifier()).second)
+        continue;
+
+      const symbolt *symbol;
+      if(ns.lookup(symbol_expr.get_identifier(), symbol))
+        continue;
+
+      if(
+        symbol->is_auxiliary && symbol->value.is_not_nil() &&
+        symbol->type.get_bool(ID_C_constant))
+      {
+        replacements.insert(symbol_expr, symbol->value);
+      }
+    }
+
+    if(replacements.empty())
+      return simplify_expr(size, ns);
+
+    replacements.replace(size);
+  }
+}
+
+void goto_check_ct::add_static_array_size_overflow_conditions(
+  const exprt &size,
+  exprt::operandst &conditions) const
+{
+  for(const auto &operand : size.operands())
+    add_static_array_size_overflow_conditions(operand, conditions);
+
+  if(
+    size.id() == ID_mult && size.operands().size() == 2 &&
+    (size.type().id() == ID_signedbv || size.type().id() == ID_unsignedbv))
+  {
+    conditions.push_back(not_exprt{mult_overflow_exprt{
+      size.operands()[0], size.operands()[1]}});
+  }
+}
+
 exprt goto_check_ct::static_array_exact_size_condition(
   const exprt &pointer,
   const exprt &byte_size) const
@@ -2876,8 +2934,8 @@ void goto_check_ct::check_static_array_parameters_at_entry(
     if(already_checked(parameter.get_identifier()))
       continue;
 
-    const exprt element_count = simplify_expr(
-      static_cast<const exprt &>(static_size_irep), ns);
+    exprt element_count = expand_static_array_size(
+      static_cast<const exprt &>(static_size_irep));
     if(has_subexpr(element_count, ID_side_effect))
       continue;
 
@@ -2892,14 +2950,19 @@ void goto_check_ct::check_static_array_parameters_at_entry(
       continue;
     }
 
-    const auto element_size =
+    const auto element_size_expr =
       size_of_expr(to_pointer_type(parameter_type).base_type(), ns);
-    CHECK_RETURN(element_size.has_value());
+    CHECK_RETURN(element_size_expr.has_value());
+    exprt element_size = expand_static_array_size(*element_size_expr);
+    if(has_subexpr(element_size, ID_side_effect))
+      continue;
+
+    check(element_size, false);
 
     const exprt element_count_for_size =
-      typecast_exprt::conditional_cast(element_count, element_size->type());
+      typecast_exprt::conditional_cast(element_count, element_size.type());
     const exprt byte_size =
-      mult_exprt{element_count_for_size, *element_size};
+      mult_exprt{element_count_for_size, element_size};
     const symbol_exprt pointer{
       parameter.get_identifier(), parameter_type};
 
@@ -2911,8 +2974,9 @@ void goto_check_ct::check_static_array_parameters_at_entry(
         ID_gt,
         from_integer(0, element_count.type())});
     }
+    add_static_array_size_overflow_conditions(element_size, conditions);
     conditions.push_back(not_exprt{
-      mult_overflow_exprt{element_count_for_size, *element_size}});
+      mult_overflow_exprt{element_count_for_size, element_size}});
     for(const auto &condition :
         get_pointer_dereferenceable_conditions(pointer, byte_size))
     {
@@ -2982,9 +3046,15 @@ void goto_check_ct::check_static_array_parameter_calls(
       parameter_type.id() == ID_pointer,
       "a static array parameter is adjusted to a pointer");
 
-    exprt element_count = static_cast<const exprt &>(static_size_irep);
+    exprt element_count = expand_static_array_size(
+      static_cast<const exprt &>(static_size_irep));
+    const auto element_size_expr =
+      size_of_expr(to_pointer_type(parameter_type).base_type(), ns);
+    CHECK_RETURN(element_size_expr.has_value());
+    exprt element_size = expand_static_array_size(*element_size_expr);
 
-    const auto bound_symbols = find_symbols(element_count);
+    auto bound_symbols = find_symbols(element_count);
+    find_symbols(element_size, bound_symbols);
     for(std::size_t parameter_index = 0;
         parameter_index < index && parameter_index < arguments.size();
         ++parameter_index)
@@ -3012,10 +3082,16 @@ void goto_check_ct::check_static_array_parameter_calls(
     }
 
     actuals.replace(element_count);
-    if(has_subexpr(element_count, ID_side_effect))
+    actuals.replace(element_size);
+    if(
+      has_subexpr(element_count, ID_side_effect) ||
+      has_subexpr(element_size, ID_side_effect))
+    {
       continue;
+    }
 
     check(element_count, false);
+    check(element_size, false);
 
     const exprt simplified_element_count = simplify_expr(element_count, ns);
     const auto constant_element_count =
@@ -3028,14 +3104,10 @@ void goto_check_ct::check_static_array_parameter_calls(
       continue;
     }
 
-    const auto element_size =
-      size_of_expr(to_pointer_type(parameter_type).base_type(), ns);
-    CHECK_RETURN(element_size.has_value());
-
     const exprt element_count_for_size =
-      typecast_exprt::conditional_cast(element_count, element_size->type());
+      typecast_exprt::conditional_cast(element_count, element_size.type());
     const exprt byte_size =
-      mult_exprt{element_count_for_size, *element_size};
+      mult_exprt{element_count_for_size, element_size};
 
     const exprt &argument = arguments[index];
     if(!constant_element_count.has_value())
@@ -3052,15 +3124,22 @@ void goto_check_ct::check_static_array_parameter_calls(
         argument,
         identity);
     }
-    add_guarded_property(
-      not_exprt{
-        mult_overflow_exprt{element_count_for_size, *element_size}},
-      "function argument failure: static array byte size overflows",
-      "array parameter",
-      true,
-      instruction.source_location(),
-      argument,
-      identity);
+    exprt::operandst size_overflow_conditions;
+    add_static_array_size_overflow_conditions(
+      element_size, size_overflow_conditions);
+    size_overflow_conditions.push_back(not_exprt{
+      mult_overflow_exprt{element_count_for_size, element_size}});
+    for(auto &condition : size_overflow_conditions)
+    {
+      add_guarded_property(
+        std::move(condition),
+        "function argument failure: static array byte size overflows",
+        "array parameter",
+        true,
+        instruction.source_location(),
+        argument,
+        identity);
+    }
 
     for(const auto &condition :
         get_pointer_dereferenceable_conditions(argument, byte_size))
