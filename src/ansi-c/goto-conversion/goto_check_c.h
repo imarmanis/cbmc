@@ -61,10 +61,10 @@ void goto_check_c(
   " {y--no-bounds-check} \t disable array bounds checks\n"                     \
   " {y--pointer-check} \t enable pointer checks (default on)\n"                \
   " {y--no-pointer-check} \t disable pointer checks\n"                         \
-  " {y--static-array} \t use static array bounds in checks "    \
-  "for dynamic pointer offsets\n"                                              \
-  " {y--strict-static-array} \t nonstandard: require exactly the static "  \
-  "array size to remain in the argument object\n"                              \
+  " {y--static-array} \t check dynamic accesses against the static array "     \
+  "bound or ordinary pointer validity\n"                                       \
+  " {y--strict-static-array} \t nonstandard: require exactly the static "      \
+  "array size and check accesses against it\n"                                 \
   " {y--memory-leak-check} \t enable memory leak checks\n"                     \
   " {y--memory-cleanup-check} \t enable memory cleanup checks\n"               \
   " {y--div-by-zero-check} \t "                                                \

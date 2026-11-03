@@ -129,8 +129,28 @@ The goto-instrument program supports these checks:
 | `--unsigned-overflow-check`  |  add arithmetic over- and underflow checks           |
 | `--undefined-shift-check`    |  add range checks for shift distances                |
 | `--nan-check`                |  add floating-point NaN checks                       |
+| `--static-array`             |  use static array bounds for dynamic pointer checks  |
+| `--strict-static-array`      |  treat static array bounds as exact extents          |
 | `--uninitialized-check`      |  add checks for uninitialized locals (experimental)  |
 | `--error-label label`        |  check that given label is unreachable               |
+
+### Static array parameters
+
+With pointer checking enabled, CBMC handles a C parameter such as
+`int x[static N]` in three ways:
+
+- By default, CBMC gives `static N` its standard C meaning: the argument must
+  provide access to at least `N` elements. A compile-time-known access within
+  those elements needs no additional pointer property.
+- `--static-array` keeps the standard meaning and extends this optimization to
+  a dynamic access such as `x[i]`. It emits one property that accepts either an
+  access within the first `N` elements or an access satisfying the ordinary
+  pointer checks. This combined formula can take longer to solve despite
+  reducing the number of properties.
+- `--strict-static-array` gives `static N` the nonstandard meaning that exactly
+  `N` elements remain from the argument pointer. A direct dynamic access then
+  needs only the range check `0 <= i && i < N`. This mode can reject valid C
+  programs that access elements beyond `N` in a larger argument array.
 
 As all of these checks apply across the entire input program, we may wish to
 disable or enable them for selected statements in the program.
