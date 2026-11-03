@@ -111,10 +111,15 @@ protected:
   std::map<irep_idt, bytest> static_array_parameter_bytes;
   bool model_has_threads = true;
 
+  /// Record the guaranteed byte extent of each static array parameter whose
+  /// value remains stable throughout the function.
+  /// \param function_symbol: Symbol for the function being checked.
+  /// \param goto_function: Body of the function being checked.
   void collect_static_array_parameters(
     const symbolt &function_symbol,
     const goto_functiont &goto_function);
 
+  /// A pointer expression derived from a recorded static array parameter.
   struct static_parameter_pointert
   {
     irep_idt identifier;
@@ -122,17 +127,30 @@ protected:
     bool has_symbolic_offset;
   };
 
+  /// Identify a pointer derived from a recorded static array parameter.
+  /// \param pointer: Pointer expression to inspect.
+  /// \return Its base parameter and offset information, if recognized.
   std::optional<static_parameter_pointert>
   get_static_parameter_pointer(const exprt &pointer) const;
 
+  /// Build the direct index range for an exact-size element access.
+  /// \param pointer: Pointer expression used by the dereference.
+  /// \param access_size: Size in bytes of the dereferenced value.
+  /// \return The range condition, if the direct-index form is recognized.
   std::optional<exprt> exact_static_parameter_index_coverage(
     const exprt &pointer,
     const exprt &access_size) const;
 
+  /// Determine whether an access lies in a recorded static array region.
+  /// \param pointer: Pointer expression used by the dereference.
+  /// \param access_size: Size in bytes of the dereferenced value.
+  /// \return A coverage condition, or empty if the access is not recognized.
   std::optional<exprt> static_parameter_coverage(
     const exprt &pointer,
     const exprt &access_size) const;
 
+  /// Build the condition that exactly \p byte_size bytes remain in the object
+  /// referred to by \p pointer.
   exprt static_array_exact_size_condition(
     const exprt &pointer,
     const exprt &byte_size) const;
@@ -144,11 +162,14 @@ protected:
 
   /// Check that arguments passed to array parameters declared with `static N`
   /// provide access to at least N elements.
+  /// \param instruction: Function-call instruction to check.
   void check_static_array_parameter_calls(
     const goto_programt::instructiont &instruction);
 
   /// Check the static minimum at function entry to cover calls made through a
   /// declaration or function-pointer type that does not carry `static N`.
+  /// \param function_symbol: Symbol for the entered function.
+  /// \param goto_function: Body of the entered function.
   void check_static_array_parameters_at_entry(
     const symbolt &function_symbol,
     const goto_functiont &goto_function);
@@ -2575,6 +2596,7 @@ void goto_check_ct::goto_check(
   goto_programt &goto_program = goto_function.body;
   local_bitvector_analysis =
     std::make_unique<local_bitvector_analysist>(goto_function, ns);
+  static_array_parameter_bytes.clear();
 
   goto_programt function_entry_code;
   if(!goto_program.instructions.empty())
@@ -2826,16 +2848,14 @@ void goto_check_ct::check_static_array_parameters_at_entry(
       const std::string comment =
         id2string(instruction.source_location().get_comment());
       if(
-        instruction.source_location().get_property_class() !=
-          "array parameter" ||
-        comment.compare(0, entry_check_comment.size(), entry_check_comment) !=
-          0)
+        instruction.source_location().get_property_class() ==
+          "array parameter" &&
+        comment.compare(0, entry_check_comment.size(), entry_check_comment) ==
+          0 &&
+        has_symbol_expr(instruction.condition(), identifier, true))
       {
-        return false;
-      }
-
-      if(has_symbol_expr(instruction.condition(), identifier, true))
         return true;
+      }
     }
     return false;
   };
@@ -2858,6 +2878,11 @@ void goto_check_ct::check_static_array_parameters_at_entry(
 
     const exprt element_count = simplify_expr(
       static_cast<const exprt &>(static_size_irep), ns);
+    if(has_subexpr(element_count, ID_side_effect))
+      continue;
+
+    check(element_count, false);
+
     const auto count = numeric_cast<mp_integer>(element_count);
     if(
       (current_function_identifier == goto_functionst::entry_point() &&
@@ -2987,6 +3012,10 @@ void goto_check_ct::check_static_array_parameter_calls(
     }
 
     actuals.replace(element_count);
+    if(has_subexpr(element_count, ID_side_effect))
+      continue;
+
+    check(element_count, false);
 
     const exprt simplified_element_count = simplify_expr(element_count, ns);
     const auto constant_element_count =

@@ -1,0 +1,11 @@
+CORE
+bound_dereference.c
+--pointer-check --show-properties
+^EXIT=0$
+^SIGNAL=0$
+^Property f.pointer_dereference.\d+:$
+function argument failure: static array size is not positive
+--
+^warning: ignoring
+--
+Checks that evaluating a static array bound receives ordinary pointer checks.

@@ -44,6 +44,8 @@ ExcludedTests = list(map(lambda s: os.path.join(test_base_dir, s[0], s[1]), [
     ['Array_Parameter_Static27', 'signed_properties.desc'],
     ['Array_Parameter_Static27', 'both.desc'],
     ['Array_Parameter_Static28', 'inside.desc'],
+    ['Array_Parameter_Static30', 'properties.desc'],
+    ['Array_Parameter_Static30', 'side_effect.desc'],
     # program-only instead of trace
     ['vla1', 'program-only.desc'],
     ['Array_operations4', 'program-only.desc'],

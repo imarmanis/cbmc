@@ -1,0 +1,10 @@
+CORE
+side_effect.c
+--pointer-check --show-properties
+^EXIT=0$
+^SIGNAL=0$
+--
+array_parameter
+warning: ignoring side_effect
+--
+Checks that ignored parameter-bound side effects are not reused by later passes.
