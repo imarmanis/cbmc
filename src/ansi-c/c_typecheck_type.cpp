@@ -13,6 +13,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <util/c_types.h>
 #include <util/config.h>
 #include <util/cprover_prefix.h>
+#include <util/expr_util.h>
 #include <util/fresh_symbol.h>
 #include <util/mathematical_types.h>
 #include <util/pointer_expr.h>
@@ -616,10 +617,14 @@ void c_typecheck_baset::typecheck_array_type(array_typet &type)
     typecheck_expr(size);
     make_index_type(size);
 
-    // Preserve the source bound after name and type resolution, but before a
-    // variable-length array bound is replaced by a callee-local helper.
-    if(type.get_bool(ID_C_array_size_static))
+    // Function parameter typechecking discards bound side effects. Do not
+    // preserve an expression that a later pass could evaluate again.
+    if(
+      type.get_bool(ID_C_array_size_static) &&
+      !has_subexpr(size, ID_side_effect))
+    {
       type.add(ID_C_static_array_size) = size;
+    }
 
     // The size need not be a constant!
     // We simplify it, for the benefit of array initialisation.
