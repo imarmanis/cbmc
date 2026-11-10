@@ -81,8 +81,7 @@ public:
     error_labels = _options.get_list_option("error-label");
     enable_pointer_primitive_check =
       _options.get_bool_option("pointer-primitive-check");
-    enable_static_array =
-      _options.get_bool_option("static-array");
+    enable_static_array = _options.get_bool_option("static-array");
     enable_strict_static_array =
       _options.get_bool_option("strict-static-array");
   }
@@ -1542,33 +1541,35 @@ void goto_check_ct::collect_static_array_parameters(
 
   // Calls can end the lifetime of an argument object, and another thread can
   // do so concurrently. Keep the ordinary checks in either case.
-  if(model_has_threads ||
-     std::any_of(
-       goto_function.body.instructions.begin(),
-       goto_function.body.instructions.end(),
-       [](const goto_programt::instructiont &instruction) {
-         if(instruction.is_function_call())
-         {
-           const exprt &function = instruction.call_function();
-           if(
-             function.id() == ID_symbol &&
-             to_symbol_expr(function).identifier() ==
-               CPROVER_PREFIX "contracts_write_set_check_assignment")
-           {
-             return false;
-           }
-           return true;
-         }
+  if(
+    model_has_threads ||
+    std::any_of(
+      goto_function.body.instructions.begin(),
+      goto_function.body.instructions.end(),
+      [](const goto_programt::instructiont &instruction)
+      {
+        if(instruction.is_function_call())
+        {
+          const exprt &function = instruction.call_function();
+          if(
+            function.id() == ID_symbol &&
+            to_symbol_expr(function).identifier() == CPROVER_PREFIX
+              "contracts_write_set_check_assignment")
+          {
+            return false;
+          }
+          return true;
+        }
 
-         if(instruction.is_other())
-           return true;
+        if(instruction.is_other())
+          return true;
 
-         return instruction.is_assign() &&
-                instruction.assign_lhs().id() == ID_symbol &&
-                to_symbol_expr(instruction.assign_lhs())
-                  .identifier()
-                  .starts_with(CPROVER_PREFIX);
-       }))
+        return instruction.is_assign() &&
+               instruction.assign_lhs().id() == ID_symbol &&
+               to_symbol_expr(instruction.assign_lhs())
+                 .identifier()
+                 .starts_with(CPROVER_PREFIX);
+      }))
   {
     return;
   }
@@ -1577,8 +1578,7 @@ void goto_check_ct::collect_static_array_parameters(
   for(const auto &parameter : parameters)
   {
     const typet &parameter_type = parameter.type();
-    const irept &static_size_irep =
-      parameter_type.find(ID_C_static_array_size);
+    const irept &static_size_irep = parameter_type.find(ID_C_static_array_size);
     if(
       parameter.get_identifier().empty() || static_size_irep.is_nil() ||
       parameter_type.id() != ID_pointer ||
@@ -1595,7 +1595,8 @@ void goto_check_ct::collect_static_array_parameters(
     const bool is_assigned = std::any_of(
       goto_function.body.instructions.begin(),
       goto_function.body.instructions.end(),
-      [&parameter](const goto_programt::instructiont &instruction) {
+      [&parameter](const goto_programt::instructiont &instruction)
+      {
         return instruction.is_assign() &&
                instruction.assign_lhs().id() == ID_symbol &&
                to_symbol_expr(instruction.assign_lhs()).identifier() ==
@@ -1604,8 +1605,8 @@ void goto_check_ct::collect_static_array_parameters(
     if(is_assigned)
       continue;
 
-    const exprt element_count = simplify_expr(
-      static_cast<const exprt &>(static_size_irep), ns);
+    const exprt element_count =
+      simplify_expr(static_cast<const exprt &>(static_size_irep), ns);
     const auto count = numeric_cast<mp_integer>(element_count);
     const auto element_size =
       pointer_offset_size(to_pointer_type(parameter_type).base_type(), ns);
@@ -1625,8 +1626,9 @@ goto_check_ct::get_static_parameter_pointer(const exprt &pointer) const
   if(pointer.id() == ID_symbol)
   {
     const irep_idt &identifier = to_symbol_expr(pointer).identifier();
-    if(static_array_parameter_bytes.find(identifier) !=
-       static_array_parameter_bytes.end())
+    if(
+      static_array_parameter_bytes.find(identifier) !=
+      static_array_parameter_bytes.end())
     {
       return static_parameter_pointert{identifier, bytest{0}, false};
     }
@@ -1655,8 +1657,7 @@ goto_check_ct::get_static_parameter_pointer(const exprt &pointer) const
       }
       else
       {
-        const auto index =
-          numeric_cast<mp_integer>(simplify_expr(operand, ns));
+        const auto index = numeric_cast<mp_integer>(simplify_expr(operand, ns));
         if(index.has_value())
           constant_index += *index;
         else
@@ -1701,8 +1702,7 @@ goto_check_ct::get_static_parameter_pointer(const exprt &pointer) const
   return {};
 }
 
-std::optional<exprt>
-goto_check_ct::exact_static_parameter_index_coverage(
+std::optional<exprt> goto_check_ct::exact_static_parameter_index_coverage(
   const exprt &pointer,
   const exprt &access_size) const
 {
@@ -1730,10 +1730,9 @@ goto_check_ct::exact_static_parameter_index_coverage(
   if(base_pointer == nullptr || index == nullptr)
     return {};
 
-  while(
-    base_pointer->id() == ID_typecast &&
-    base_pointer->operands().size() == 1 &&
-    to_typecast_expr(*base_pointer).op().type().id() == ID_pointer)
+  while(base_pointer->id() == ID_typecast &&
+        base_pointer->operands().size() == 1 &&
+        to_typecast_expr(*base_pointer).op().type().id() == ID_pointer)
   {
     base_pointer = &to_typecast_expr(*base_pointer).op();
   }
@@ -1746,10 +1745,9 @@ goto_check_ct::exact_static_parameter_index_coverage(
   if(region == static_array_parameter_bytes.end())
     return {};
 
-  const auto element_size = pointer_offset_size(
-    to_pointer_type(base_pointer->type()).base_type(), ns);
-  const auto size =
-    numeric_cast<mp_integer>(simplify_expr(access_size, ns));
+  const auto element_size =
+    pointer_offset_size(to_pointer_type(base_pointer->type()).base_type(), ns);
+  const auto size = numeric_cast<mp_integer>(simplify_expr(access_size, ns));
   if(
     !element_size.has_value() || *element_size <= bytest{0} ||
     !size.has_value() || bytest{*size} != *element_size ||
@@ -1767,11 +1765,9 @@ goto_check_ct::exact_static_parameter_index_coverage(
     ++width;
 
   const signedbv_typet wide_type{width};
-  const exprt wide_index =
-    typecast_exprt::conditional_cast(*index, wide_type);
+  const exprt wide_index = typecast_exprt::conditional_cast(*index, wide_type);
   return and_exprt{
-    binary_relation_exprt{
-      wide_index, ID_ge, from_integer(0, wide_type)},
+    binary_relation_exprt{wide_index, ID_ge, from_integer(0, wide_type)},
     binary_relation_exprt{
       wide_index, ID_lt, from_integer(element_count, wide_type)}};
 }
@@ -1781,15 +1777,15 @@ std::optional<exprt> goto_check_ct::static_parameter_coverage(
   const exprt &access_size) const
 {
   const exprt simplified_pointer = simplify_expr(pointer, ns);
-  if(auto exact_index_coverage = exact_static_parameter_index_coverage(
-       simplified_pointer, access_size))
+  if(
+    auto exact_index_coverage =
+      exact_static_parameter_index_coverage(simplified_pointer, access_size))
   {
     return exact_index_coverage;
   }
 
   const auto base = get_static_parameter_pointer(simplified_pointer);
-  const auto size =
-    numeric_cast<mp_integer>(simplify_expr(access_size, ns));
+  const auto size = numeric_cast<mp_integer>(simplify_expr(access_size, ns));
   if(!base.has_value() || !size.has_value() || *size < 0)
     return {};
 
@@ -1806,14 +1802,11 @@ std::optional<exprt> goto_check_ct::static_parameter_coverage(
     if(is_covered)
       return true_exprt{};
 
-    return enable_strict_static_array
-             ? std::optional<exprt>{false_exprt{}}
-             : std::optional<exprt>{};
+    return enable_strict_static_array ? std::optional<exprt>{false_exprt{}}
+                                      : std::optional<exprt>{};
   }
 
-  if(
-    !enable_static_array &&
-    !enable_strict_static_array)
+  if(!enable_static_array && !enable_strict_static_array)
   {
     return {};
   }
@@ -1842,13 +1835,11 @@ std::optional<exprt> goto_check_ct::static_parameter_coverage(
   const minus_exprt relative_offset{
     typecast_exprt::conditional_cast(pointer_offset_expr, wide_type),
     typecast_exprt::conditional_cast(base_offset_expr, wide_type)};
-  const plus_exprt access_end{
-    relative_offset, from_integer(*size, wide_type)};
+  const plus_exprt access_end{relative_offset, from_integer(*size, wide_type)};
 
   return and_exprt{
     same_object(simplified_pointer, base_pointer),
-    binary_relation_exprt{
-      relative_offset, ID_ge, from_integer(0, wide_type)},
+    binary_relation_exprt{relative_offset, ID_ge, from_integer(0, wide_type)},
     binary_relation_exprt{
       access_end, ID_le, from_integer(region->second.get(), wide_type)}};
 }
@@ -1894,8 +1885,8 @@ void goto_check_ct::add_static_array_size_overflow_conditions(
     size.id() == ID_mult && size.operands().size() == 2 &&
     (size.type().id() == ID_signedbv || size.type().id() == ID_unsignedbv))
   {
-    conditions.push_back(not_exprt{mult_overflow_exprt{
-      size.operands()[0], size.operands()[1]}});
+    conditions.push_back(
+      not_exprt{mult_overflow_exprt{size.operands()[0], size.operands()[1]}});
   }
 }
 
@@ -1987,8 +1978,7 @@ void goto_check_ct::pointer_validity_check(
       original_conditions.push_back(condition.assertion);
 
     add_guarded_property(
-      or_exprt{
-        std::move(*static_coverage), conjunction(original_conditions)},
+      or_exprt{std::move(*static_coverage), conjunction(original_conditions)},
       "dereference failure: access is outside the static parameter minimum "
       "and is not otherwise valid",
       "pointer dereference",
@@ -2893,11 +2883,13 @@ void goto_check_ct::check_static_array_parameters_at_entry(
 
   const std::string entry_check_comment =
     enable_strict_static_array
-      ? "function parameter does not have exactly its static array size remaining"
+      ? "function parameter does not have exactly its static array size "
+        "remaining"
       : "function parameter does not provide access to its static minimum";
 
   const auto already_checked =
-    [&goto_function, &entry_check_comment](const irep_idt &identifier) {
+    [&goto_function, &entry_check_comment](const irep_idt &identifier)
+  {
     for(const auto &instruction : goto_function.body.instructions)
     {
       if(!instruction.is_assert())
@@ -2918,12 +2910,10 @@ void goto_check_ct::check_static_array_parameters_at_entry(
     return false;
   };
 
-  for(const auto &parameter :
-      to_code_type(function_symbol.type).parameters())
+  for(const auto &parameter : to_code_type(function_symbol.type).parameters())
   {
     const typet &parameter_type = parameter.type();
-    const irept &static_size_irep =
-      parameter_type.find(ID_C_static_array_size);
+    const irept &static_size_irep = parameter_type.find(ID_C_static_array_size);
     if(
       parameter.get_identifier().empty() || static_size_irep.is_nil() ||
       parameter_type.id() != ID_pointer)
@@ -2934,8 +2924,8 @@ void goto_check_ct::check_static_array_parameters_at_entry(
     if(already_checked(parameter.get_identifier()))
       continue;
 
-    exprt element_count = expand_static_array_size(
-      static_cast<const exprt &>(static_size_irep));
+    exprt element_count =
+      expand_static_array_size(static_cast<const exprt &>(static_size_irep));
     if(has_subexpr(element_count, ID_side_effect))
       continue;
 
@@ -2961,22 +2951,18 @@ void goto_check_ct::check_static_array_parameters_at_entry(
 
     const exprt element_count_for_size =
       typecast_exprt::conditional_cast(element_count, element_size.type());
-    const exprt byte_size =
-      mult_exprt{element_count_for_size, element_size};
-    const symbol_exprt pointer{
-      parameter.get_identifier(), parameter_type};
+    const exprt byte_size = mult_exprt{element_count_for_size, element_size};
+    const symbol_exprt pointer{parameter.get_identifier(), parameter_type};
 
     exprt::operandst conditions;
     if(!count.has_value())
     {
       conditions.push_back(binary_relation_exprt{
-        element_count,
-        ID_gt,
-        from_integer(0, element_count.type())});
+        element_count, ID_gt, from_integer(0, element_count.type())});
     }
     add_static_array_size_overflow_conditions(element_size, conditions);
-    conditions.push_back(not_exprt{
-      mult_overflow_exprt{element_count_for_size, element_size}});
+    conditions.push_back(
+      not_exprt{mult_overflow_exprt{element_count_for_size, element_size}});
     for(const auto &condition :
         get_pointer_dereferenceable_conditions(pointer, byte_size))
     {
@@ -3011,7 +2997,8 @@ void goto_check_ct::check_static_array_parameters_at_entry(
 void goto_check_ct::check_static_array_parameter_calls(
   const goto_programt::instructiont &instruction)
 {
-  if(!enable_pointer_check || instruction.call_function().type().id() != ID_code)
+  if(
+    !enable_pointer_check || instruction.call_function().type().id() != ID_code)
     return;
 
   const auto &parameters =
@@ -3037,8 +3024,7 @@ void goto_check_ct::check_static_array_parameter_calls(
       ++index)
   {
     const typet &parameter_type = parameters[index].type();
-    const irept &static_size_irep =
-      parameter_type.find(ID_C_static_array_size);
+    const irept &static_size_irep = parameter_type.find(ID_C_static_array_size);
     if(static_size_irep.is_nil())
       continue;
 
@@ -3046,8 +3032,8 @@ void goto_check_ct::check_static_array_parameter_calls(
       parameter_type.id() == ID_pointer,
       "a static array parameter is adjusted to a pointer");
 
-    exprt element_count = expand_static_array_size(
-      static_cast<const exprt &>(static_size_irep));
+    exprt element_count =
+      expand_static_array_size(static_cast<const exprt &>(static_size_irep));
     const auto element_size_expr =
       size_of_expr(to_pointer_type(parameter_type).base_type(), ns);
     CHECK_RETURN(element_size_expr.has_value());
@@ -3106,17 +3092,14 @@ void goto_check_ct::check_static_array_parameter_calls(
 
     const exprt element_count_for_size =
       typecast_exprt::conditional_cast(element_count, element_size.type());
-    const exprt byte_size =
-      mult_exprt{element_count_for_size, element_size};
+    const exprt byte_size = mult_exprt{element_count_for_size, element_size};
 
     const exprt &argument = arguments[index];
     if(!constant_element_count.has_value())
     {
       add_guarded_property(
         binary_relation_exprt{
-          element_count,
-          ID_gt,
-          from_integer(0, element_count.type())},
+          element_count, ID_gt, from_integer(0, element_count.type())},
         "function argument failure: static array size is not positive",
         "array parameter",
         true,
@@ -3127,8 +3110,8 @@ void goto_check_ct::check_static_array_parameter_calls(
     exprt::operandst size_overflow_conditions;
     add_static_array_size_overflow_conditions(
       element_size, size_overflow_conditions);
-    size_overflow_conditions.push_back(not_exprt{
-      mult_overflow_exprt{element_count_for_size, element_size}});
+    size_overflow_conditions.push_back(
+      not_exprt{mult_overflow_exprt{element_count_for_size, element_size}});
     for(auto &condition : size_overflow_conditions)
     {
       add_guarded_property(

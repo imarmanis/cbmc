@@ -89,8 +89,8 @@ void symbol_factoryt::gen_nondet_init(
     const irept &static_size_irep = type.find(ID_C_static_array_size);
     if(static_size_irep.is_not_nil())
     {
-      const exprt simplified_size = simplify_expr(
-        static_cast<const exprt &>(static_size_irep), ns);
+      const exprt simplified_size =
+        simplify_expr(static_cast<const exprt &>(static_size_irep), ns);
       const auto size = numeric_cast<mp_integer>(simplified_size);
       if(size.has_value() && *size > 0)
       {
@@ -106,17 +106,14 @@ void symbol_factoryt::gen_nondet_init(
     exprt init_expr = allocate_objects.allocate_object(
       non_null_inst, expr, object_type, lifetime);
 
-    if(
-      static_array_size.has_value() &&
-      !has_subtype(base_type, ID_pointer, ns))
+    if(static_array_size.has_value() && !has_subtype(base_type, ID_pointer, ns))
     {
       // Without pointers inside, the elements need no allocation of their
       // own. A single nondet assignment keeps the harness size independent
       // of the static array size.
       // `init_expr` is the first element, so address the whole array.
       non_null_inst.add(code_frontend_assignt{
-        dereference_exprt{
-          typecast_exprt{expr, ::pointer_type(object_type)}},
+        dereference_exprt{typecast_exprt{expr, ::pointer_type(object_type)}},
         side_effect_expr_nondett{object_type, loc},
         loc});
     }
@@ -135,12 +132,12 @@ void symbol_factoryt::gen_nondet_init(
     }
     else
     {
-      gen_nondet_init(
-        non_null_inst, init_expr, depth + 1, recursion_set, true);
+      gen_nondet_init(non_null_inst, init_expr, depth + 1, recursion_set, true);
     }
 
-    if(static_array_size.has_value() ||
-       depth < object_factory_params.min_null_tree_depth)
+    if(
+      static_array_size.has_value() ||
+      depth < object_factory_params.min_null_tree_depth)
     {
       // Add the following code to assignments:
       // <expr> = <aoe>;

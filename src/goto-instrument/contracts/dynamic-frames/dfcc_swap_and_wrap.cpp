@@ -42,16 +42,14 @@ static void remove_static_array_bounds_from_check_wrapper(
 {
   symbolt &wrapper_symbol =
     goto_model.symbol_table.get_writeable_ref(wrapper_id);
-  auto &wrapper_parameters =
-    to_code_type(wrapper_symbol.type).parameters();
+  auto &wrapper_parameters = to_code_type(wrapper_symbol.type).parameters();
 
   for(auto &parameter : wrapper_parameters)
   {
     parameter.type().remove(ID_C_static_array_size);
     if(!parameter.get_identifier().empty())
     {
-      goto_model.symbol_table
-        .get_writeable_ref(parameter.get_identifier())
+      goto_model.symbol_table.get_writeable_ref(parameter.get_identifier())
         .type.remove(ID_C_static_array_size);
     }
   }
