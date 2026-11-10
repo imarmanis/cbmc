@@ -49,6 +49,7 @@ ExcludedTests = list(map(lambda s: os.path.join(test_base_dir, s[0], s[1]), [
     ['Array_Parameter_Static31', 'default.desc'],
     ['Array_Parameter_Static31', 'static.desc'],
     ['Array_Parameter_Static31', 'strict.desc'],
+    ['Array_Parameter_Static33', 'program.desc'],
     # counterexample traces cannot reconstruct VLA-typed parameter pointers
     ['Array_Parameter_Static32', 'too_small.desc'],
     # program-only instead of trace

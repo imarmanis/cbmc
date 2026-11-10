@@ -1,0 +1,13 @@
+CORE
+main.c
+--function f
+^EXIT=10$
+^SIGNAL=0$
+^\[f\.assertion\.1\] line 3 elements are nondet: FAILURE$
+^\*\* 1 of \d+ failed
+--
+^warning: ignoring
+--
+A --function harness for a pointer-free [static N] parameter initializes the
+argument array with one nondet assignment rather than one per element, so
+large static sizes do not inflate the harness.
