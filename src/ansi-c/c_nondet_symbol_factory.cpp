@@ -13,6 +13,7 @@ Author: Diffblue Ltd.
 
 #include <util/arith_tools.h>
 #include <util/c_types.h>
+#include <util/expr_util.h>
 #include <util/fresh_symbol.h>
 #include <util/namespace.h>
 #include <util/nondet_bool.h>
@@ -105,7 +106,21 @@ void symbol_factoryt::gen_nondet_init(
     exprt init_expr = allocate_objects.allocate_object(
       non_null_inst, expr, object_type, lifetime);
 
-    if(static_array_size.has_value())
+    if(
+      static_array_size.has_value() &&
+      !has_subtype(base_type, ID_pointer, ns))
+    {
+      // Without pointers inside, the elements need no allocation of their
+      // own. A single nondet assignment keeps the harness size independent
+      // of the static array size.
+      // `init_expr` is the first element, so address the whole array.
+      non_null_inst.add(code_frontend_assignt{
+        dereference_exprt{
+          typecast_exprt{expr, ::pointer_type(object_type)}},
+        side_effect_expr_nondett{object_type, loc},
+        loc});
+    }
+    else if(static_array_size.has_value())
     {
       for(mp_integer index = 0; index < *static_array_size; ++index)
       {

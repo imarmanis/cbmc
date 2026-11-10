@@ -1,0 +1,11 @@
+CORE
+main.c
+--function f --show-goto-functions
+^EXIT=0$
+^SIGNAL=0$
+ASSIGN \*\(cast\(__CPROVER__start::a, signedbv\[32\]\[100000\]\*\)\) := side_effect statement="nondet"
+--
+ASSIGN \*\(__CPROVER__start::a \+
+--
+Pins the single whole-array nondet assignment for a pointer-free
+[static N] parameter in a --function harness.
