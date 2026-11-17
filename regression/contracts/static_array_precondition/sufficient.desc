@@ -1,0 +1,10 @@
+CORE
+sufficient.c
+--enforce-contract f _ --pointer-check
+^EXIT=0$
+^SIGNAL=0$
+^VERIFICATION SUCCESSFUL$
+--
+--
+A sufficient legacy function contract establishes the generated static-array
+precondition before the implementation runs.

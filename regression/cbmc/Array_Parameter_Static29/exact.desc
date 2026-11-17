@@ -1,11 +1,11 @@
 CORE
 exact.c
 --pointer-check --strict-static-array
-^EXIT=10$
+^EXIT=0$
 ^SIGNAL=0$
-function parameter does not have exactly its static array size remaining.*: FAILURE$
+^VERIFICATION SUCCESSFUL$
 --
 ^warning: ignoring
 --
-Checks exact remaining extent at function entry for a runtime static bound
-whose function-pointer call type does not carry the metadata.
+Strict access mode does not require an argument to have exactly the declared
+static minimum remaining after function-pointer removal.

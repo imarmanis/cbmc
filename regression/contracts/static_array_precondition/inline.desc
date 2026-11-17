@@ -1,0 +1,11 @@
+CORE
+inline.c
+--inline _ --pointer-check
+^EXIT=10$
+^SIGNAL=0$
+static array parameter x must provide access to its declared minimum.*: FAILURE$
+^VERIFICATION FAILED$
+--
+--
+Lowering the static minimum before GOTO transformations preserves it when the
+callee is inlined before ordinary precondition instrumentation.

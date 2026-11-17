@@ -8,6 +8,7 @@ SRC = \
       bv_arithmetic.cpp \
       byte_operators.cpp \
       c_types.cpp \
+      c_static_array_parameters.cpp \
       cmdline.cpp \
       config.cpp \
       console.cpp \

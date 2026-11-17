@@ -10,6 +10,7 @@ Date: June 2003
 
 #include "goto_convert_functions.h"
 
+#include <util/c_static_array_parameters.h>
 #include <util/std_code.h>
 #include <util/symbol_table_builder.h>
 
@@ -201,6 +202,22 @@ void goto_convert_functionst::convert_function(
                              code_type.return_type().id() != ID_constructor &&
                              code_type.return_type().id() != ID_destructor;
 
+  if(mode == ID_C)
+  {
+    for(auto &precondition :
+        static_array_parameter_preconditions(code_type, symbol.name, ns))
+    {
+      source_locationt source_location = precondition.source_location;
+      if(source_location.get_function().empty())
+        source_location.set_function(symbol.name);
+      source_location.set_property_class(ID_precondition);
+      source_location.set_comment(precondition.description);
+      source_location.set("user-provided", false);
+      source_location.set("generated-static-array-precondition", true);
+      f.body.add(goto_programt::make_assertion(
+        std::move(precondition.condition), std::move(source_location)));
+    }
+  }
   goto_convert_rec(code, f.body, mode);
 
   // add non-det return value, if needed

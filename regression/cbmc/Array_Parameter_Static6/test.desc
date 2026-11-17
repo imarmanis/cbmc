@@ -1,6 +1,6 @@
 CORE
 main.c
---pointer-check
+--pointer-check --static-array
 ^EXIT=0$
 ^SIGNAL=0$
 VERIFICATION SUCCESSFUL
@@ -8,5 +8,5 @@ VERIFICATION SUCCESSFUL
 ^\[(plain|qualified)\.pointer_dereference\.
 ^warning: ignoring
 --
-Checks that covered accesses through unchanged static and static const
-parameters do not generate repeated callee pointer properties.
+The opt-in static-array optimization removes repeated pointer properties for
+covered accesses through unchanged static and static-const parameters.

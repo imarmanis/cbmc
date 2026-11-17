@@ -7,5 +7,5 @@ VERIFICATION SUCCESSFUL
 --
 ^warning: ignoring
 --
-Checks that exact-size mode accepts an N-element object and an interior pointer
-with exactly N elements remaining.
+Strict access mode accepts an N-element object and an interior pointer with N
+elements remaining.

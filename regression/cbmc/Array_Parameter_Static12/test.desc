@@ -3,9 +3,9 @@ main.c
 --pointer-check
 ^EXIT=10$
 ^SIGNAL=0$
-function parameter does not provide access to its static minimum.*: FAILURE$
+static array parameter x must provide access to its declared minimum.*: FAILURE$
 --
-function argument failure:.*: FAILURE$
 ^warning: ignoring
 --
-Checks that a call-site pragma cannot leave callee-side elimination unguarded.
+A pointer-check pragma does not disable the language-level precondition, so the
+optional access optimization cannot become an unguarded assumption.

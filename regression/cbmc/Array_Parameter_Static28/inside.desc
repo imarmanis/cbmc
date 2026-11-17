@@ -7,5 +7,5 @@ inside.c
 ^Property read_last.pointer_dereference.
 ^warning: ignoring
 --
-Checks that exact-size mode eliminates ordinary pointer properties for a
-constant access within the declared static extent.
+Strict access mode eliminates ordinary pointer properties for a constant
+access within the declared static range.

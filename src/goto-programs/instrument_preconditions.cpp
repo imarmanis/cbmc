@@ -11,9 +11,17 @@ Date:   September 2017
 
 #include "instrument_preconditions.h"
 
+#include <util/c_static_array_parameters.h>
 #include <util/replace_symbol.h>
 
 #include "goto_model.h"
+
+static void remove_source_locations(exprt &expr)
+{
+  expr.remove(ID_C_source_location);
+  for(auto &operand : expr.operands())
+    remove_source_locations(operand);
+}
 
 std::vector<goto_programt::const_targett> get_preconditions(
   const symbol_exprt &function,
@@ -82,15 +90,23 @@ replace_symbolt actuals_replace_map(
 
   replace_symbolt result;
   std::size_t count=0;
-  for(const auto &p : parameters)
+  for(const auto &parameter : parameters)
   {
-    if(!p.get_identifier().empty() && arguments.size() > count)
+    irep_idt parameter_identifier = parameter.get_identifier();
+    if(parameter_identifier.empty() && !parameter.get_base_name().empty())
     {
-      const exprt a =
-        typecast_exprt::conditional_cast(arguments[count], p.type());
-      result.insert(symbol_exprt(p.get_identifier(), p.type()), a);
+      parameter_identifier = id2string(s.name) + "::" +
+                             id2string(parameter.get_base_name());
     }
-    count++;
+
+    if(!parameter_identifier.empty() && arguments.size() > count)
+    {
+      const exprt argument = typecast_exprt::conditional_cast(
+        arguments[count], parameter.type());
+      result.insert(
+        symbol_exprt{parameter_identifier, parameter.type()}, argument);
+    }
+    ++count;
   }
 
   return result;
@@ -123,17 +139,51 @@ void instrument_preconditions(
           as_const(*it).call_arguments(),
           ns);
 
-        // add before the call, with location of the call
-        for(const auto &p : preconditions)
+        for(const auto &precondition : preconditions)
         {
+          if(precondition->source_location().get_bool(
+               "generated-static-array-precondition"))
+          {
+            continue;
+          }
+
           goto_program.insert_before_swap(it);
-          exprt instance = p->condition();
+          exprt instance = precondition->condition();
           r(instance);
           source_locationt annotated_location = source_location;
           annotated_location.set_property_class(ID_precondition_instance);
-          annotated_location.set_comment(p->source_location().get_comment());
+          annotated_location.set_comment(
+            precondition->source_location().get_comment());
           *it = goto_programt::make_assertion(instance, annotated_location);
-          it++;
+          ++it;
+        }
+
+        const symbol_exprt &called_function =
+          to_symbol_expr(as_const(*it).call_function());
+        const symbolt &function_symbol = ns.lookup(called_function);
+        if(
+          function_symbol.mode == ID_C &&
+          !function_symbol.type.get_bool(ID_C_contract_generated))
+        {
+          for(auto &precondition : static_array_parameter_preconditions(
+                to_code_type(function_symbol.type),
+                function_symbol.name,
+                ns))
+          {
+            goto_program.insert_before_swap(it);
+            r.replace(precondition.condition);
+            remove_source_locations(precondition.condition);
+            precondition.condition.add_source_location() = source_location;
+
+            source_locationt annotated_location = source_location;
+            annotated_location.set_property_class(ID_precondition_instance);
+            annotated_location.set_comment(precondition.description);
+            annotated_location.set("user-provided", false);
+            *it = goto_programt::make_assertion(
+              std::move(precondition.condition),
+              std::move(annotated_location));
+            ++it;
+          }
         }
       }
     }

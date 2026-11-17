@@ -1,0 +1,10 @@
+CORE
+weak.c
+--enforce-contract f _ --pointer-check
+^EXIT=0$
+^SIGNAL=0$
+^VERIFICATION SUCCESSFUL$
+--
+--
+The language-level static minimum augments an explicit legacy contract, so its
+requires clauses establish valid inputs before the implementation runs.

@@ -9,10 +9,12 @@ Author: Daniel Kroening, kroening@kroening.com
 #include "ansi_c_entry_point.h"
 
 #include <util/arith_tools.h>
+#include <util/c_static_array_parameters.h>
 #include <util/c_types.h>
 #include <util/config.h>
 #include <util/message.h>
 #include <util/pointer_expr.h>
+#include <util/replace_symbol.h>
 #include <util/symbol_table_base.h>
 
 #include <goto-programs/goto_functions.h>
@@ -21,6 +23,27 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include "c_nondet_symbol_factory.h"
 #include "expr2c.h"
+
+static void substitute_function_parameter_array_sizes(
+  typet &type,
+  replace_symbolt &actual_arguments,
+  const namespacet &ns)
+{
+  if(type.id() == ID_pointer)
+  {
+    substitute_function_parameter_array_sizes(
+      to_pointer_type(type).base_type(), actual_arguments, ns);
+  }
+  else if(type.id() == ID_array)
+  {
+    array_typet &array_type = to_array_type(type);
+    exprt size = expand_c_array_size(array_type.size(), ns);
+    actual_arguments.replace(size);
+    array_type.size() = std::move(size);
+    substitute_function_parameter_array_sizes(
+      array_type.element_type(), actual_arguments, ns);
+  }
+}
 
 exprt::operandst build_function_environment(
   const code_typet::parameterst &parameters,
@@ -31,22 +54,45 @@ exprt::operandst build_function_environment(
   exprt::operandst main_arguments;
   main_arguments.resize(parameters.size());
 
-  for(std::size_t param_number=0;
-      param_number<parameters.size();
-      param_number++)
+  replace_symbolt actual_arguments;
+  const namespacet ns{symbol_table};
+  for(std::size_t param_number = 0; param_number < parameters.size();
+      ++param_number)
   {
-    const code_typet::parametert &p=parameters[param_number];
-    const irep_idt base_name=p.get_base_name().empty()?
-      ("argument#"+std::to_string(param_number)):p.get_base_name();
+    const code_typet::parametert &parameter = parameters[param_number];
+    const irep_idt base_name = parameter.get_base_name().empty()
+                                ? "argument#" + std::to_string(param_number)
+                                : parameter.get_base_name();
 
+    typet argument_type = parameter.type();
+    actual_arguments.replace(argument_type);
+    substitute_function_parameter_array_sizes(
+      argument_type, actual_arguments, ns);
+    const irept &static_size_irep =
+      argument_type.find(ID_C_static_array_size);
+    if(static_size_irep.is_not_nil())
+    {
+      exprt static_size = expand_c_array_size(
+        static_cast<const exprt &>(static_size_irep), ns);
+      actual_arguments.replace(static_size);
+      argument_type.add(ID_C_static_array_size) = std::move(static_size);
+    }
     main_arguments[param_number] = c_nondet_symbol_factory(
       init_code,
       symbol_table,
       base_name,
-      p.type(),
-      p.source_location(),
+      argument_type,
+      parameter.source_location(),
       object_factory_parameters,
       lifetimet::AUTOMATIC_LOCAL);
+
+    if(!parameter.get_identifier().empty())
+    {
+      actual_arguments.insert(
+        symbol_exprt{parameter.get_identifier(), parameter.type()},
+        typecast_exprt::conditional_cast(
+          main_arguments[param_number], parameter.type()));
+    }
   }
 
   return main_arguments;

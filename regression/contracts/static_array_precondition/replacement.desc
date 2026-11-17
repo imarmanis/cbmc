@@ -1,0 +1,11 @@
+CORE
+replacement.c
+--replace-call-with-contract f _ --pointer-check
+^EXIT=10$
+^SIGNAL=0$
+Check requires clause of f in main.*: FAILURE$
+^VERIFICATION FAILED$
+--
+--
+Replacing a call with an explicit contract also checks the language-level
+static minimum added to that contract.

@@ -1,0 +1,12 @@
+CORE
+main.c
+--pointer-check
+^EXIT=10$
+^SIGNAL=0$
+static array parameter x must provide access to its declared minimum.*: FAILURE$
+no body for callee consume.*: FAILURE$
+--
+^warning: ignoring
+--
+The generic precondition pass obtains a static minimum from a declaration even
+when no function body is available.

@@ -1,0 +1,15 @@
+CORE
+main.c
+--pointer-check
+^EXIT=10$
+^SIGNAL=0$
+^\[main\.precondition_instance\.1\].*static array parameter x.*: FAILURE$
+^\[main\.precondition_instance\.2\].*static array parameter x.*: FAILURE$
+^\[main\.precondition_instance\.3\].*static array parameter x.*: FAILURE$
+^\[main\.precondition_instance\.4\].*static array parameter x.*: FAILURE$
+^\*\* 4 of \d+ failed
+--
+^warning: ignoring
+--
+Static minima survive compatible declarations before and after a definition,
+parameter renaming, and selection of the largest declared constant minimum.

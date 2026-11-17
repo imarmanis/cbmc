@@ -294,6 +294,7 @@ protected:
   void typecheck_redefinition_type(symbolt &old_symbol, symbolt &new_symbol);
   void typecheck_redefinition_non_type(
     symbolt &old_symbol, symbolt &new_symbol);
+  void refresh_static_array_contract_preconditions(const symbolt &function);
   void typecheck_function_body(symbolt &symbol);
 
   /// Create symbols for parameter of the code-typed symbol \p symbol.

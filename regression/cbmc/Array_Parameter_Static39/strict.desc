@@ -1,0 +1,11 @@
+CORE
+main.c
+--pointer-check --strict-static-array
+^EXIT=10$
+^SIGNAL=0$
+access is outside the declared static array range.*: FAILURE$
+--
+^warning: ignoring
+--
+The nonstandard strict access mode deliberately rejects negative indices even
+when ordinary C pointer bounds would permit the access.

@@ -11,11 +11,16 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include "c_typecheck_base.h"
 
+#include <util/arith_tools.h>
+#include <util/c_static_array_parameters.h>
 #include <util/c_types.h>
 #include <util/config.h>
 #include <util/cprover_prefix.h>
 #include <util/expr_util.h>
+#include <util/find_symbols.h>
 #include <util/mathematical_expr.h>
+#include <util/replace_symbol.h>
+#include <util/std_expr.h>
 #include <util/std_types.h>
 #include <util/symbol_table_base.h>
 
@@ -24,6 +29,9 @@ Author: Daniel Kroening, kroening@kroening.com
 #include "ansi_c_declaration.h"
 #include "c_storage_spec.h"
 #include "expr2c.h"
+
+#include <algorithm>
+#include <set>
 
 std::string c_typecheck_baset::to_string(const exprt &expr)
 {
@@ -316,6 +324,160 @@ static bool is_instantiation_of_flexible_array(
          (old_array_type.size().is_nil() || old_array_type.size() == 0);
 }
 
+/// Preserve the strongest `[static N]` minimum from compatible declarations
+/// of the same function. Parameter symbols in a bound are renamed by position
+/// because each declaration may use different parameter names.
+static void merge_static_array_parameter_sizes(
+  code_typet &destination,
+  const code_typet &source,
+  const irep_idt &function_identifier)
+{
+  auto &destination_parameters = destination.parameters();
+  const auto &source_parameters = source.parameters();
+  if(destination_parameters.size() != source_parameters.size())
+    return;
+
+  const auto parameter_identifier =
+    [&function_identifier](const code_typet::parametert &parameter)
+  {
+    if(!parameter.get_identifier().empty())
+      return parameter.get_identifier();
+    if(parameter.get_base_name().empty())
+      return irep_idt{};
+    return irep_idt{id2string(function_identifier) + "::" +
+                    id2string(parameter.get_base_name())};
+  };
+
+  replace_symbolt rename;
+  std::set<irep_idt> unmappable;
+  for(std::size_t index = 0; index < destination_parameters.size(); ++index)
+  {
+    const irep_idt source_identifier =
+      parameter_identifier(source_parameters[index]);
+    const irep_idt destination_identifier =
+      parameter_identifier(destination_parameters[index]);
+    if(source_identifier.empty() || source_identifier == destination_identifier)
+      continue;
+
+    if(
+      destination_identifier.empty() ||
+      source_parameters[index].type() != destination_parameters[index].type())
+    {
+      unmappable.insert(source_identifier);
+      continue;
+    }
+
+    rename.insert(
+      symbol_exprt{source_identifier, source_parameters[index].type()},
+      symbol_exprt{
+        destination_identifier, destination_parameters[index].type()});
+  }
+
+  for(std::size_t index = 0; index < destination_parameters.size(); ++index)
+  {
+    const irept &source_size_irep =
+      source_parameters[index].type().find(ID_C_static_array_size);
+    if(source_size_irep.is_nil())
+      continue;
+
+    exprt source_size = static_cast<const exprt &>(source_size_irep);
+    const auto source_symbols = find_symbols(source_size);
+    if(std::any_of(
+         source_symbols.begin(),
+         source_symbols.end(),
+         [&unmappable](const symbol_exprt &symbol)
+         {
+           return unmappable.find(symbol.get_identifier()) != unmappable.end();
+         }))
+    {
+      continue;
+    }
+    rename.replace(source_size);
+
+    typet &destination_type = destination_parameters[index].type();
+    const irept &destination_size_irep =
+      destination_type.find(ID_C_static_array_size);
+    if(destination_size_irep.is_nil())
+    {
+      destination_type.add(ID_C_static_array_size) = std::move(source_size);
+      continue;
+    }
+
+    exprt destination_size =
+      static_cast<const exprt &>(destination_size_irep);
+    if(destination_size == source_size)
+      continue;
+
+    const auto destination_constant =
+      numeric_cast<mp_integer>(destination_size);
+    const auto source_constant = numeric_cast<mp_integer>(source_size);
+    if(destination_constant.has_value() && source_constant.has_value())
+    {
+      if(*source_constant > *destination_constant)
+        destination_type.add(ID_C_static_array_size) = std::move(source_size);
+      continue;
+    }
+
+    source_size = typecast_exprt::conditional_cast(
+      std::move(source_size), destination_size.type());
+    destination_type.add(ID_C_static_array_size) = if_exprt{
+      binary_relation_exprt{destination_size, ID_ge, source_size},
+      std::move(destination_size),
+      std::move(source_size)};
+  }
+}
+
+void c_typecheck_baset::refresh_static_array_contract_preconditions(
+  const symbolt &function)
+{
+  symbolt *contract_symbol = symbol_table.get_writeable(
+    "contract::" + id2string(function.name));
+  if(contract_symbol == nullptr)
+    return;
+
+  code_with_contract_typet &contract_type =
+    to_code_with_contract_type(contract_symbol->type);
+  merge_static_array_parameter_sizes(
+    contract_type, to_code_type(function.type), function.name);
+
+  auto &requires = contract_type.c_requires();
+  requires.erase(
+    std::remove_if(
+      requires.begin(),
+      requires.end(),
+      [](const exprt &requirement)
+      {
+        return requirement.get_bool(ID_C_static_array_precondition);
+      }),
+    requires.end());
+
+  binding_exprt::variablest contract_parameters;
+  if(contract_type.return_type().id() != ID_empty)
+  {
+    contract_parameters.emplace_back(
+      CPROVER_PREFIX "return_value", contract_type.return_type());
+  }
+  for(const auto &parameter : contract_type.parameters())
+  {
+    if(!parameter.get_identifier().empty())
+    {
+      contract_parameters.emplace_back(
+        parameter.get_identifier(), parameter.type());
+    }
+  }
+
+  for(auto &precondition : static_array_parameter_preconditions(
+        contract_type, function.name, *this))
+  {
+    precondition.condition.add_source_location() =
+      precondition.source_location;
+    lambda_exprt lambda{contract_parameters, precondition.condition};
+    lambda.add_source_location() = precondition.source_location;
+    lambda.set(ID_C_static_array_precondition, true);
+    requires.push_back(std::move(lambda));
+  }
+}
+
 void c_typecheck_baset::typecheck_redefinition_non_type(
   symbolt &old_symbol,
   symbolt &new_symbol)
@@ -490,10 +652,15 @@ void c_typecheck_baset::typecheck_redefinition_non_type(
       old_symbol.value.swap(new_symbol.value);
 
       // overwrite type (because of parameter names)
+      merge_static_array_parameter_sizes(new_ct, old_ct, old_symbol.name);
       old_symbol.type=new_symbol.type;
     }
     else if(to_code_with_contract_type(new_ct).has_contract())
     {
+      // Preserve the strongest static-array minimum before overwriting the
+      // declaration with the contract-bearing type.
+      merge_static_array_parameter_sizes(new_ct, old_ct, old_symbol.name);
+
       // overwrite type to add contract, but keep the old parameter identifiers
       // (if any)
       auto new_parameters_it = new_ct.parameters().begin();
@@ -508,7 +675,10 @@ void c_typecheck_baset::typecheck_redefinition_non_type(
 
       old_symbol.type = new_symbol.type;
     }
+    else
+      merge_static_array_parameter_sizes(old_ct, new_ct, old_symbol.name);
 
+    refresh_static_array_contract_preconditions(old_symbol);
     return;
   }
 
@@ -930,6 +1100,23 @@ void c_typecheck_baset::typecheck_declaration(
           lambda_exprt lambda{temporary_parameter_symbols, c_requires};
           lambda.add_source_location() = c_requires.source_location();
           c_requires.swap(lambda);
+        }
+
+        // The C `[static N]` minimum is part of the callable interface. Add it
+        // to explicit code contracts so enforcement may assume it and
+        // replacement checks it like any other requires clause. These
+        // generated expressions are already type checked by construction.
+        for(auto &precondition :
+            static_array_parameter_preconditions(
+              code_type, identifier, *this))
+        {
+          precondition.condition.add_source_location() =
+            precondition.source_location;
+          lambda_exprt lambda{
+            temporary_parameter_symbols, precondition.condition};
+          lambda.add_source_location() = precondition.source_location;
+          lambda.set(ID_C_static_array_precondition, true);
+          code_type.c_requires().push_back(std::move(lambda));
         }
 
         typecheck_spec_assigns(code_type.c_assigns());

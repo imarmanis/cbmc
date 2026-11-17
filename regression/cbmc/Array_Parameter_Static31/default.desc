@@ -3,12 +3,14 @@ main.c
 --pointer-check --show-properties
 ^EXIT=0$
 ^SIGNAL=0$
-^Property read_dynamic.pointer_dereference.1:$
-^Property read_dynamic.pointer_dereference.6:$
+^Property read_dynamic\.pointer_dereference\.1:$
+^Property read_dynamic\.pointer_dereference\.6:$
+^Property read_known\.pointer_dereference\.1:$
+^Property read_known\.pointer_dereference\.24:$
 --
-^Property read_known.pointer_dereference.
-^Property read_dynamic.pointer_dereference.7:$
+^Property read_dynamic\.pointer_dereference\.7:$
+^Property read_known\.pointer_dereference\.25:$
 ^warning: ignoring
 --
-Shows that known in-range accesses are eliminated while dynamic accesses retain
-ordinary pointer properties by default.
+By default the language precondition is enforced without changing ordinary
+pointer properties; using static minima to simplify accesses is opt-in.

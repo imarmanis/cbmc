@@ -1,0 +1,12 @@
+CORE
+main.c
+--function f
+^EXIT=10$
+^SIGNAL=0$
+^\[f\.assertion\.1\] line 3 pointer elements are nondet: FAILURE$
+^\*\* 1 of \d+ failed
+--
+^warning: ignoring
+--
+A --function harness initializes a large static array of pointer elements with
+one nondeterministic assignment rather than recursively allocating each pointer.

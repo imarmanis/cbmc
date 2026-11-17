@@ -12,12 +12,13 @@ Author: Diffblue Ltd.
 #include "c_nondet_symbol_factory.h"
 
 #include <util/arith_tools.h>
+#include <util/bitvector_expr.h>
 #include <util/c_types.h>
-#include <util/expr_util.h>
 #include <util/fresh_symbol.h>
 #include <util/namespace.h>
 #include <util/nondet_bool.h>
 #include <util/pointer_expr.h>
+#include <util/pointer_offset_size.h>
 #include <util/simplify_expr.h>
 #include <util/std_expr.h>
 #include <util/symbol.h>
@@ -26,6 +27,34 @@ Author: Diffblue Ltd.
 
 #include "allocate_objects.h"
 #include "c_object_factory_parameters.h"
+
+static void add_valid_array_size_assumptions(
+  code_blockt &code,
+  const typet &type,
+  const namespacet &ns)
+{
+  if(type.id() != ID_array)
+    return;
+
+  const array_typet &array_type = to_array_type(type);
+  const exprt size = simplify_expr(array_type.size(), ns);
+  if(!numeric_cast<mp_integer>(size).has_value())
+  {
+    code.add(code_assumet{
+      binary_relation_exprt{size, ID_gt, from_integer(0, size.type())}});
+  }
+
+  const auto element_size = size_of_expr(array_type.element_type(), ns);
+  if(element_size.has_value())
+  {
+    const exprt count_for_size =
+      typecast_exprt::conditional_cast(size, element_size->type());
+    code.add(code_assumet{
+      not_exprt{mult_overflow_exprt{count_for_size, *element_size}}});
+  }
+
+  add_valid_array_size_assumptions(code, array_type.element_type(), ns);
+}
 
 /// Creates a nondet for expr, including calling itself recursively to make
 /// appropriate symbols to point to if expr is a pointer.
@@ -85,20 +114,25 @@ void symbol_factoryt::gen_nondet_init(
     code_blockt non_null_inst;
 
     typet object_type = base_type;
-    std::optional<mp_integer> static_array_size;
+    std::optional<exprt> static_array_size;
     const irept &static_size_irep = type.find(ID_C_static_array_size);
     if(static_size_irep.is_not_nil())
     {
-      const exprt simplified_size =
+      exprt size =
         simplify_expr(static_cast<const exprt &>(static_size_irep), ns);
-      const auto size = numeric_cast<mp_integer>(simplified_size);
-      if(size.has_value() && *size > 0)
+      const auto constant_size = numeric_cast<mp_integer>(size);
+      if(!constant_size.has_value() || *constant_size > 0)
       {
         static_array_size = size;
-        object_type =
-          array_typet{base_type, from_integer(*size, c_index_type())};
+        object_type = array_typet{
+          base_type,
+          typecast_exprt::conditional_cast(
+            std::move(size), c_index_type())};
       }
     }
+
+    if(static_array_size.has_value())
+      add_valid_array_size_assumptions(non_null_inst, object_type, ns);
 
     if(object_type.id() == ID_empty)
       object_type = char_type();
@@ -106,29 +140,17 @@ void symbol_factoryt::gen_nondet_init(
     exprt init_expr = allocate_objects.allocate_object(
       non_null_inst, expr, object_type, lifetime);
 
-    if(static_array_size.has_value() && !has_subtype(base_type, ID_pointer, ns))
+    if(static_array_size.has_value())
     {
-      // Without pointers inside, the elements need no allocation of their
-      // own. A single nondet assignment keeps the harness size independent
-      // of the static array size.
+      // C's `[static N]` promises only the outer array storage. Pointer
+      // elements may themselves be arbitrary. Initializing the complete array
+      // at once models that contract and avoids generating O(N) recursive
+      // pointer allocations.
       // `init_expr` is the first element, so address the whole array.
       non_null_inst.add(code_frontend_assignt{
         dereference_exprt{typecast_exprt{expr, ::pointer_type(object_type)}},
         side_effect_expr_nondett{object_type, loc},
         loc});
-    }
-    else if(static_array_size.has_value())
-    {
-      for(mp_integer index = 0; index < *static_array_size; ++index)
-      {
-        gen_nondet_init(
-          non_null_inst,
-          dereference_exprt{
-            plus_exprt{expr, from_integer(index, c_index_type())}},
-          depth + 1,
-          recursion_set,
-          true);
-      }
     }
     else
     {

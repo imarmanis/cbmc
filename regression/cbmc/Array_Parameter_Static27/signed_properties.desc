@@ -9,5 +9,5 @@ signed_properties.c
 ^Property read_exact_signed.pointer_dereference.[2-9][0-9]*:$
 ^warning: ignoring
 --
-Checks that exact-size mode emits a direct lower-and-upper index range for a
-signed dynamic index.
+Strict access mode emits a direct lower-and-upper range for a signed dynamic
+index.

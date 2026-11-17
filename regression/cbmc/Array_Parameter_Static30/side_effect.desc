@@ -1,10 +1,11 @@
 CORE
 side_effect.c
 --pointer-check --show-properties
-^EXIT=0$
+^EXIT=6$
 ^SIGNAL=0$
+side effects in static array parameter bounds are not supported
 --
-array_parameter
-warning: ignoring side_effect
+INVARIANT
 --
-Checks that ignored parameter-bound side effects are not reused by later passes.
+An unsupported side-effecting static bound is rejected rather than silently
+losing the language-level minimum-size requirement.

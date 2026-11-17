@@ -1,11 +1,11 @@
 CORE
 main.c
 --function f --pointer-check
-^EXIT=10$
+^EXIT=0$
 ^SIGNAL=0$
-function parameter does not provide access to its static minimum.*: FAILURE$
+^VERIFICATION SUCCESSFUL$
 --
 ^warning: ignoring
 --
-Checks that --function does not bypass a runtime static minimum when its
-generated pointer object cannot be sized from the nondeterministic bound.
+A --function harness substitutes earlier nondeterministic arguments into a
+runtime static minimum and allocates a valid variable-length argument array.

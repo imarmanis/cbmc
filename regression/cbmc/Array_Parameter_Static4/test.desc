@@ -3,9 +3,9 @@ main.c
 --pointer-check
 ^EXIT=10$
 ^SIGNAL=0$
-^\[main.array_parameter.\d+\] line \d+ function argument failure: pointer outside object bounds in .*: FAILURE$
+^\[main\.precondition_instance\.\d+\].*static array parameter x must provide access to its declared minimum.*: FAILURE$
 --
 ^warning: ignoring
 --
-Checks that a runtime static bound is replaced by the corresponding actual
-argument before the call-site validity check is generated.
+A runtime static bound is replaced by the corresponding actual argument when
+the ordinary precondition is instantiated at the call site.

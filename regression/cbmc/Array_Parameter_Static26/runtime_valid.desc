@@ -7,5 +7,5 @@ VERIFICATION SUCCESSFUL
 --
 ^warning: ignoring
 --
-Checks exact remaining extent after substituting a runtime static bound at the
-call site.
+Checks strict access mode after substituting a runtime static bound in the
+ordinary call precondition.

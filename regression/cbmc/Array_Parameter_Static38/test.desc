@@ -1,0 +1,11 @@
+CORE
+main.c
+--pointer-check
+^EXIT=10$
+^SIGNAL=0$
+static array parameter x must provide access to its declared minimum.*: FAILURE$
+--
+^warning: ignoring
+--
+The generated precondition rejects a static element count whose byte extent
+would overflow size_t.

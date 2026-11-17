@@ -3,9 +3,12 @@ bound_dereference.c
 --pointer-check --show-properties
 ^EXIT=0$
 ^SIGNAL=0$
-^Property f.pointer_dereference.\d+:$
-function argument failure: static array size is not positive
+^Property main\.pointer_dereference\.\d+:$
+dereference failure: pointer NULL in \*count
+^Property main\.precondition_instance\.\d+:$
+static array parameter x must provide access to its declared minimum
 --
 ^warning: ignoring
 --
-Checks that evaluating a static array bound receives ordinary pointer checks.
+The generated precondition uses the static bound expression, and its pointer
+access receives one deduplicated set of ordinary call-site pointer checks.

@@ -3,9 +3,9 @@ outside.c
 --pointer-check --strict-static-array
 ^EXIT=10$
 ^SIGNAL=0$
-access is outside the exact static array size.*: FAILURE$
+access is outside the declared static array range.*: FAILURE$
 --
 ^warning: ignoring
 --
-Checks that exact-size mode rejects a constant access outside the declared
-static extent without retaining ordinary pointer checks.
+Strict access mode rejects a constant access outside the declared static range
+without retaining ordinary pointer checks.

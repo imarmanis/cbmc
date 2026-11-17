@@ -1265,6 +1265,8 @@ void code_contractst::enforce_contract(const irep_idt &function)
   goto_functiont &wrapper = goto_functions.function_map[original];
   wrapper.parameter_identifiers = mangled_fun->second.parameter_identifiers;
   wrapper.body.add(goto_programt::make_end_function());
+  symbol_table.get_writeable_ref(original).type.set(
+    ID_C_contract_generated, true);
   add_contract_check(original, mangled, wrapper.body);
 }
 

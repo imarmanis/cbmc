@@ -617,12 +617,17 @@ void c_typecheck_baset::typecheck_array_type(array_typet &type)
     typecheck_expr(size);
     make_index_type(size);
 
-    // Function parameter typechecking discards bound side effects. Do not
-    // preserve an expression that a later pass could evaluate again.
-    if(
-      type.get_bool(ID_C_array_size_static) &&
-      !has_subexpr(size, ID_side_effect))
+    // A preserved static bound is later lowered to a function precondition.
+    // Re-evaluating a side effect there would change the program, while
+    // silently dropping it would lose the C size requirement. Reject this
+    // unsupported case explicitly.
+    if(type.get_bool(ID_C_array_size_static))
     {
+      if(has_subexpr(size, ID_side_effect))
+      {
+        throw errort().with_location(size_source_location)
+          << "side effects in static array parameter bounds are not supported";
+      }
       type.add(ID_C_static_array_size) = size;
     }
 

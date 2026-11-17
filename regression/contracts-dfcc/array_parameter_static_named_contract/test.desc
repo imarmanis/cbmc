@@ -1,0 +1,13 @@
+CORE dfcc-only
+main.c
+--dfcc main --enforce-contract function/contract _ --show-properties
+^EXIT=0$
+^SIGNAL=0$
+^Property (function\.)?precondition_instance\.\d+:$
+static array parameter x must provide access to its declared minimum
+--
+^warning: ignoring
+--
+A wrapper generated for a separately named contract relies on that contract's
+requires clauses before checking the wrapped implementation's C-level static
+minimum.

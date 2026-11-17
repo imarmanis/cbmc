@@ -3,8 +3,9 @@ main.c
 --pointer-check
 ^EXIT=10$
 ^SIGNAL=0$
-function argument failure: pointer outside object bounds.*: FAILURE$
+static array parameter x must provide access to its declared minimum.*: FAILURE$
 --
 ^warning: ignoring
 --
-Checks that runtime inner dimensions contribute to the caller-side extent.
+Runtime inner dimensions contribute to the minimum byte extent in the
+instantiated function precondition.

@@ -3,9 +3,9 @@ main.c
 --pointer-check
 ^EXIT=10$
 ^SIGNAL=0$
-function parameter does not provide access to its static minimum.*: FAILURE$
+static array parameter x must provide access to its declared minimum.*: FAILURE$
 --
 ^warning: ignoring
 --
-Checks that callee-side elimination is guarded when an earlier prototype did
-not carry the definition's static minimum.
+A definition's static minimum becomes an ordinary precondition even when an
+earlier prototype used a plain pointer.

@@ -3,13 +3,13 @@ main.c
 --pointer-check --strict-static-array --show-properties
 ^EXIT=0$
 ^SIGNAL=0$
-^Property read_dynamic.pointer_dereference.1:$
-access is outside the exact static array size
+^Property read_dynamic\.pointer_dereference\.1:$
+access is outside the declared static array range
 ^  \(signed __CPROVER_bitvector\[65\]\)\(signed long int\)i >= 0 && !\(\(signed __CPROVER_bitvector\[65\]\)\(signed long int\)i >= 4\)$
 --
-^Property read_known.pointer_dereference.
-^Property read_dynamic.pointer_dereference.2:$
+^Property read_known\.pointer_dereference\.
+^Property read_dynamic\.pointer_dereference\.2:$
 ^warning: ignoring
 --
-Shows that --strict-static-array replaces a direct dynamic access with one
-index-range property and eliminates known in-range accesses.
+--strict-static-array replaces a direct dynamic access with one index-range
+property and eliminates known in-range accesses without requiring exact size.

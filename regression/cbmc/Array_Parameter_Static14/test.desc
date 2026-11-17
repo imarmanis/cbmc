@@ -3,10 +3,10 @@ main.c
 --pointer-check
 ^EXIT=10$
 ^SIGNAL=0$
-function argument failure: pointer outside object bounds.*: FAILURE$
+static array parameter values must provide access to its declared minimum.*: FAILURE$
 --
 ^warning: ignoring
 INVARIANT
 --
-Checks positional substitution of a runtime static bound when prototype
-parameter identifiers have been erased and no definition is present.
+A runtime minimum from an earlier prototype is renamed to the plain-pointer
+definition's parameter names and instantiated with the call arguments.

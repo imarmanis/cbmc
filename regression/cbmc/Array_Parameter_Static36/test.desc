@@ -1,0 +1,11 @@
+CORE
+caller.c
+definition.c --pointer-check
+^EXIT=10$
+^SIGNAL=0$
+static array parameter x must provide access to its declared minimum.*: FAILURE$
+--
+^warning: ignoring
+--
+A constant static minimum survives linking when its declaration and plain
+pointer definition are compiled as separate translation units.

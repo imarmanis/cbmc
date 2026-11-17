@@ -136,21 +136,52 @@ The goto-instrument program supports these checks:
 
 ### Static array parameters
 
-With pointer checking enabled, CBMC handles a C parameter such as
-`int x[static N]` in three ways:
+For a C parameter declared as `int x[static N]`, CBMC emits a function
+precondition requiring the argument to provide access to at least `N` elements.
+The existing precondition-instrumentation pass copies this requirement to each
+direct call site. This is the standard C minimum-size meaning; the bound is not
+an exact array size.
 
-- By default, CBMC gives `static N` its standard C meaning: the argument must
-  provide access to at least `N` elements. A compile-time-known access within
-  those elements needs no additional pointer property.
-- `--static-array` keeps the standard meaning and extends this optimization to
-  a dynamic access such as `x[i]`. It emits one property that accepts either an
-  access within the first `N` elements or an access satisfying the ordinary
-  pointer checks. This combined formula can take longer to solve despite
-  reducing the number of properties.
-- `--strict-static-array` gives `static N` the nonstandard meaning that exactly
-  `N` elements remain from the argument pointer. A direct dynamic access then
-  needs only the range check `0 <= i && i < N`. This mode can reject valid C
-  programs that access elements beyond `N` in a larger argument array.
+The requirement is independent of the access-check optimization options below:
+
+- `--static-array` uses a constant static minimum to remove pointer properties
+  for compile-time-known accesses within that range. For a dynamic access such
+  as `x[i]`, it emits one property accepting either an access within the static
+  minimum or an access satisfying the ordinary pointer checks.
+- `--strict-static-array` restricts direct accesses through the parameter to
+  `0 <= i < N`. This is a nonstandard analysis mode: C also permits an access
+  beyond the promised minimum when the actual array is larger, and permits a
+  negative index when the parameter points into an array and the resulting
+  address remains within that array.
+
+The optimization is disabled when the parameter may change or escape, when the
+function makes calls, or when threads could invalidate the promised storage.
+
+A static bound with side effects is rejected because evaluating it again while
+creating the precondition could change program behavior. Static bounds from
+compatible declarations in the same translation unit are retained and their
+parameter names are adjusted to those of the definition. The strongest
+constant minimum present on the linked function symbol is retained across
+translation units; a declaration discarded before linking cannot contribute a
+minimum. The generic precondition pass obtains the final bound from the called
+function type, so it also checks calls whose definition is unavailable. When `--function` selects a
+function with static array parameters, the generated harness substitutes
+previous arguments into runtime bounds and constructs an outer array that
+satisfies the minimum-size precondition. Existing CBMC limitations when
+symbolically accessing multidimensional variable-length parameter arrays still
+apply. Static outer arrays, including arrays of pointers, are initialized with
+one nondeterministic assignment.
+
+When a function has an explicit code contract, the static minimum is also added
+to that contract's requires clauses. Contract enforcement may therefore assume
+the language requirement before checking the implementation, while contract
+replacement checks it at the call. Contract-checking wrappers and generated
+specification functions are marked so the generic precondition pass does not
+add a premature duplicate check. The wrapped implementation remains unmarked:
+its check runs after the requires clauses have been assumed, proving that a
+separately named contract supplies the function's C-level minimum. Replacement
+wrappers also remain unmarked because their callers are source-level calls that
+must satisfy that minimum.
 
 As all of these checks apply across the entire input program, we may wish to
 disable or enable them for selected statements in the program.

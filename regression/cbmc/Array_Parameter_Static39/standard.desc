@@ -1,0 +1,11 @@
+CORE
+main.c
+--pointer-check
+^EXIT=0$
+^SIGNAL=0$
+^VERIFICATION SUCCESSFUL$
+--
+^warning: ignoring
+--
+Standard static-array semantics permit a negative parameter index when the
+resulting address remains within the actual array.

@@ -12,6 +12,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include "linking.h"
 #include "linking_class.h"
 
+#include <util/arith_tools.h>
 #include <util/c_types.h>
 #include <util/find_symbols.h>
 #include <util/message.h>
@@ -79,10 +80,72 @@ linkingt::renamingt linkingt::needs_renaming_non_type(
     return renamingt::NO_RENAMING;
 }
 
+/// Preserve constant C `[static N]` minima across translation-unit linking.
+/// The language requires the largest constant minimum from compatible
+/// declarations, while this metadata does not participate in type equality.
+static void merge_constant_static_array_parameter_sizes(
+  symbolt &old_symbol,
+  symbolt &new_symbol,
+  const namespacet &ns)
+{
+  if(
+    old_symbol.mode != ID_C || new_symbol.mode != ID_C ||
+    old_symbol.type.id() != ID_code || new_symbol.type.id() != ID_code)
+  {
+    return;
+  }
+
+  auto &old_parameters = to_code_type(old_symbol.type).parameters();
+  auto &new_parameters = to_code_type(new_symbol.type).parameters();
+  if(old_parameters.size() != new_parameters.size())
+    return;
+
+  for(std::size_t index = 0; index < old_parameters.size(); ++index)
+  {
+    typet &old_type = old_parameters[index].type();
+    typet &new_type = new_parameters[index].type();
+    const irept &old_size_irep = old_type.find(ID_C_static_array_size);
+    const irept &new_size_irep = new_type.find(ID_C_static_array_size);
+
+    std::optional<mp_integer> old_size;
+    if(old_size_irep.is_not_nil())
+    {
+      old_size = numeric_cast<mp_integer>(simplify_expr(
+        static_cast<const exprt &>(old_size_irep), ns));
+    }
+    std::optional<mp_integer> new_size;
+    if(new_size_irep.is_not_nil())
+    {
+      new_size = numeric_cast<mp_integer>(simplify_expr(
+        static_cast<const exprt &>(new_size_irep), ns));
+    }
+
+    if(
+      (old_size_irep.is_not_nil() && !old_size.has_value()) ||
+      (new_size_irep.is_not_nil() && !new_size.has_value()))
+    {
+      continue;
+    }
+    if(!old_size.has_value() && !new_size.has_value())
+      continue;
+
+    const bool use_new =
+      new_size.has_value() &&
+      (!old_size.has_value() || *new_size > *old_size);
+    const exprt strongest_size = use_new
+                                   ? static_cast<const exprt &>(new_size_irep)
+                                   : static_cast<const exprt &>(old_size_irep);
+    old_type.add(ID_C_static_array_size) = strongest_size;
+    new_type.add(ID_C_static_array_size) = strongest_size;
+  }
+}
+
 void linkingt::duplicate_code_symbol(
   symbolt &old_symbol,
   symbolt &new_symbol)
 {
+  merge_constant_static_array_parameter_sizes(old_symbol, new_symbol, ns);
+
   linking_diagnosticst diag{message_handler, ns};
 
   // Both are functions.

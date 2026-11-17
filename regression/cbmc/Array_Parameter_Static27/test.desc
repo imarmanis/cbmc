@@ -7,5 +7,5 @@ VERIFICATION SUCCESSFUL
 --
 ^warning: ignoring
 --
-Checks that exact-size mode uses the exact static region for a bounded dynamic
-index without requiring the standard dynamic-check option.
+Strict access mode uses the declared static region for a bounded dynamic index
+without requiring the combined dynamic-check option.

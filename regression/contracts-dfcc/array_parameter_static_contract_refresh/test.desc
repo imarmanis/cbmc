@@ -1,0 +1,12 @@
+CORE dfcc-only
+main.c
+--dfcc main --replace-call-with-contract function
+^EXIT=10$
+^SIGNAL=0$
+Check requires clause of contract contract::function for function function: FAILURE$
+^VERIFICATION FAILED$
+--
+^warning: ignoring
+--
+A later compatible declaration refreshes the generated static requires clause
+inside an existing code contract with the stronger minimum.
