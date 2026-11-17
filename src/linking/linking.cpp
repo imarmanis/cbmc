@@ -13,6 +13,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include "linking_class.h"
 
 #include <util/arith_tools.h>
+#include <util/c_static_array_parameters.h>
 #include <util/c_types.h>
 #include <util/find_symbols.h>
 #include <util/message.h>
@@ -138,6 +139,34 @@ static void merge_constant_static_array_parameter_sizes(
     old_type.add(ID_C_static_array_size) = strongest_size;
     new_type.add(ID_C_static_array_size) = strongest_size;
   }
+}
+
+/// Rebuild the requires clauses that a C code contract generates from the
+/// `[static N]` minima of its function, after linking may have strengthened
+/// those minima with a declaration from another translation unit.
+static void refresh_contract_static_array_requires(
+  symbol_table_baset &symbol_table,
+  const irep_idt &function_identifier,
+  const namespacet &ns)
+{
+  const symbolt *function = symbol_table.lookup(function_identifier);
+  if(
+    function == nullptr || function->is_type || function->mode != ID_C ||
+    function->type.id() != ID_code)
+  {
+    return;
+  }
+
+  symbolt *contract =
+    symbol_table.get_writeable("contract::" + id2string(function->name));
+  if(contract == nullptr || contract->type.id() != ID_code)
+    return;
+
+  refresh_static_array_contract_requires(
+    to_code_with_contract_type(contract->type),
+    to_code_type(function->type),
+    function->name,
+    ns);
 }
 
 void linkingt::duplicate_code_symbol(
@@ -1102,6 +1131,11 @@ void linkingt::copy_symbols(
     else
       duplicate_non_type_symbol(old_symbol, new_symbol);
   }
+
+  // A merged function symbol may carry a stronger static array minimum than
+  // the requires clauses generated in its code contract.
+  for(const irep_idt &collision : collisions)
+    refresh_contract_static_array_requires(main_symbol_table, collision, ns);
 
   // Apply type updates to initializers
   for(auto it = main_symbol_table.begin(); it != main_symbol_table.end(); ++it)

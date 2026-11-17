@@ -1,10 +1,18 @@
 CORE
 weak.c
 --enforce-contract f _ --pointer-check
-^EXIT=0$
+^EXIT=10$
 ^SIGNAL=0$
-^VERIFICATION SUCCESSFUL$
+^\[f\.precondition_instance\.1\] .*static array parameter x must provide access to its declared minimum: FAILURE$
+^\[f\.assertion\.1\] .*implementation is reachable: FAILURE$
+^VERIFICATION FAILED$
 --
+^\[main\.precondition_instance\.
+^\s*ASSUME .*r_ok\(f::
 --
-The language-level static minimum augments an explicit legacy contract, so its
-requires clauses establish valid inputs before the implementation runs.
+A function's own contract that is weaker than its [static N] minimum cannot be
+enforced. The generated static-array requires clause is not assumed, so the
+contract's one-element is_fresh does not contradict it and the implementation
+stays reachable. The minimum is checked at the call to the original
+implementation after the explicit requires clauses have been assumed, the same
+way as for a separately named contract.

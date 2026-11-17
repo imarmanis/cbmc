@@ -3,6 +3,7 @@ main.c
 --function f --pointer-check
 ^EXIT=0$
 ^SIGNAL=0$
+^\[precondition_instance\.1\] .*static array parameter x must provide access to its declared minimum: SUCCESS$
 ^VERIFICATION SUCCESSFUL$
 --
 ^warning: ignoring

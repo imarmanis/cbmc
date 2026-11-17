@@ -3,8 +3,12 @@ sufficient.c
 --enforce-contract f _ --pointer-check
 ^EXIT=0$
 ^SIGNAL=0$
+^\[f\.precondition_instance\.1\] .*static array parameter x must provide access to its declared minimum: SUCCESS$
 ^VERIFICATION SUCCESSFUL$
 --
+^\[main\.precondition_instance\.
 --
 A sufficient legacy function contract establishes the generated static-array
-precondition before the implementation runs.
+precondition before the implementation runs. The harness call to the marked
+contract-checking wrapper receives no static-array precondition, so the check
+happens only after the requires clauses have been assumed.

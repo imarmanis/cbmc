@@ -15,8 +15,10 @@ Author: Iason Marmanis
 #include <util/arith_tools.h>
 #include <util/bitvector_expr.h>
 #include <util/c_types.h>
+#include <util/cprover_prefix.h>
 #include <util/find_symbols.h>
 #include <util/invariant.h>
+#include <util/mathematical_expr.h>
 #include <util/namespace.h>
 #include <util/pointer_expr.h>
 #include <util/pointer_offset_size.h>
@@ -26,6 +28,7 @@ Author: Iason Marmanis
 #include <util/std_types.h>
 #include <util/symbol.h>
 
+#include <algorithm>
 #include <set>
 
 /// Replace auxiliary VLA-size symbols by their defining expressions.
@@ -136,4 +139,151 @@ static_array_parameter_preconditions(
   }
 
   return result;
+}
+
+void merge_static_array_parameter_sizes(
+  code_typet &destination,
+  const code_typet &source,
+  const irep_idt &function_identifier)
+{
+  auto &destination_parameters = destination.parameters();
+  const auto &source_parameters = source.parameters();
+  if(destination_parameters.size() != source_parameters.size())
+    return;
+
+  const auto parameter_identifier =
+    [&function_identifier](const code_typet::parametert &parameter)
+  {
+    if(!parameter.get_identifier().empty())
+      return parameter.get_identifier();
+    if(parameter.get_base_name().empty())
+      return irep_idt{};
+    return irep_idt{id2string(function_identifier) + "::" +
+                    id2string(parameter.get_base_name())};
+  };
+
+  replace_symbolt rename;
+  std::set<irep_idt> unmappable;
+  for(std::size_t index = 0; index < destination_parameters.size(); ++index)
+  {
+    const irep_idt source_identifier =
+      parameter_identifier(source_parameters[index]);
+    const irep_idt destination_identifier =
+      parameter_identifier(destination_parameters[index]);
+    if(source_identifier.empty() || source_identifier == destination_identifier)
+      continue;
+
+    if(
+      destination_identifier.empty() ||
+      source_parameters[index].type() != destination_parameters[index].type())
+    {
+      unmappable.insert(source_identifier);
+      continue;
+    }
+
+    rename.insert(
+      symbol_exprt{source_identifier, source_parameters[index].type()},
+      symbol_exprt{
+        destination_identifier, destination_parameters[index].type()});
+  }
+
+  for(std::size_t index = 0; index < destination_parameters.size(); ++index)
+  {
+    const irept &source_size_irep =
+      source_parameters[index].type().find(ID_C_static_array_size);
+    if(source_size_irep.is_nil())
+      continue;
+
+    exprt source_size = static_cast<const exprt &>(source_size_irep);
+    const auto source_symbols = find_symbols(source_size);
+    if(std::any_of(
+         source_symbols.begin(),
+         source_symbols.end(),
+         [&unmappable](const symbol_exprt &symbol)
+         {
+           return unmappable.find(symbol.get_identifier()) != unmappable.end();
+         }))
+    {
+      continue;
+    }
+    rename.replace(source_size);
+
+    typet &destination_type = destination_parameters[index].type();
+    const irept &destination_size_irep =
+      destination_type.find(ID_C_static_array_size);
+    if(destination_size_irep.is_nil())
+    {
+      destination_type.add(ID_C_static_array_size) = std::move(source_size);
+      continue;
+    }
+
+    exprt destination_size =
+      static_cast<const exprt &>(destination_size_irep);
+    if(destination_size == source_size)
+      continue;
+
+    const auto destination_constant =
+      numeric_cast<mp_integer>(destination_size);
+    const auto source_constant = numeric_cast<mp_integer>(source_size);
+    if(destination_constant.has_value() && source_constant.has_value())
+    {
+      if(*source_constant > *destination_constant)
+        destination_type.add(ID_C_static_array_size) = std::move(source_size);
+      continue;
+    }
+
+    source_size = typecast_exprt::conditional_cast(
+      std::move(source_size), destination_size.type());
+    destination_type.add(ID_C_static_array_size) = if_exprt{
+      binary_relation_exprt{destination_size, ID_ge, source_size},
+      std::move(destination_size),
+      std::move(source_size)};
+  }
+}
+
+void refresh_static_array_contract_requires(
+  code_with_contract_typet &contract_type,
+  const code_typet &function_type,
+  const irep_idt &function_identifier,
+  const namespacet &ns)
+{
+  merge_static_array_parameter_sizes(
+    contract_type, function_type, function_identifier);
+
+  auto &requires = contract_type.c_requires();
+  requires.erase(
+    std::remove_if(
+      requires.begin(),
+      requires.end(),
+      [](const exprt &requirement)
+      {
+        return requirement.get_bool(ID_C_static_array_precondition);
+      }),
+    requires.end());
+
+  binding_exprt::variablest contract_parameters;
+  if(contract_type.return_type().id() != ID_empty)
+  {
+    contract_parameters.emplace_back(
+      CPROVER_PREFIX "return_value", contract_type.return_type());
+  }
+  for(const auto &parameter : contract_type.parameters())
+  {
+    if(!parameter.get_identifier().empty())
+    {
+      contract_parameters.emplace_back(
+        parameter.get_identifier(), parameter.type());
+    }
+  }
+
+  for(auto &precondition : static_array_parameter_preconditions(
+        contract_type, function_identifier, ns))
+  {
+    precondition.condition.add_source_location() =
+      precondition.source_location;
+    lambda_exprt lambda{contract_parameters, precondition.condition};
+    lambda.add_source_location() = precondition.source_location;
+    lambda.set(ID_C_static_array_precondition, true);
+    requires.push_back(std::move(lambda));
+  }
 }

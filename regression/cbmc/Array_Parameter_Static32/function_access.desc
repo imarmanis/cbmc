@@ -1,0 +1,15 @@
+CORE
+function_access.c
+--function f --pointer-check
+^EXIT=0$
+^SIGNAL=0$
+^\[precondition_instance\.1\] .*static array parameter x must provide access to its declared minimum: SUCCESS$
+^VERIFICATION SUCCESSFUL$
+--
+^warning: ignoring
+--
+The --function harness substitutes both earlier arguments into the outer
+static minimum and the inner runtime dimension, so the last promised element
+is accessible. The access goes through a flat element pointer because
+symbolic indexing of a multidimensional variable-length array hits an existing
+goto-symex limitation that this feature does not address.

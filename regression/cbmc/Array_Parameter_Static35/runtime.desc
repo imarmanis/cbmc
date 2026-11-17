@@ -1,0 +1,18 @@
+CORE
+runtime.c
+--pointer-check
+^EXIT=10$
+^SIGNAL=0$
+^\[main\.precondition_instance\.1\] line 16 static array parameter x must provide access to its declared minimum: FAILURE$
+^\[main\.precondition_instance\.2\] line 17 static array parameter x must provide access to its declared minimum: SUCCESS$
+^\[main\.precondition_instance\.3\] line 18 static array parameter x must provide access to its declared minimum: FAILURE$
+^\[main\.no-body\.two_declarations\] line 16 no body for callee two_declarations: FAILURE$
+^\*\* 3 of \d+ failed
+--
+^warning: ignoring
+INVARIANT
+--
+A later prototype-only declaration strengthens a constant minimum. Runtime
+minima from declarations with different parameter names are renamed to the
+definition's parameters and combined into their maximum, so 3 + 2 elements are
+required.

@@ -1,0 +1,18 @@
+CORE dfcc-only
+valid.c
+--dfcc main --enforce-contract-rec f
+^EXIT=10$
+^SIGNAL=0$
+^\[precondition_instance\.1\] .*static array parameter x must provide access to its declared minimum: SUCCESS$
+^\[f\.precondition\.\d+\] line 1 Check requires clause of contract contract::f for function f: SUCCESS$
+^\[f\.assertion\.1\] .*base case is reachable: FAILURE$
+^\*\* 1 of \d+ failed
+^VERIFICATION FAILED$
+--
+^\s*ASSUME ¬\(overflow-\*\(cast\(4, unsignedbv\[64\]\), 4\)\)
+^warning: ignoring
+--
+A recursive call replaced by the contract asserts the generated static-array
+requires clause and satisfies it. The top-level contract check does not assume
+that clause; the minimum is checked at the call to the wrapped implementation.
+The reachability assertion is the only failure, so the check is not vacuous.

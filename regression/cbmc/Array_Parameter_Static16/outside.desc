@@ -1,0 +1,13 @@
+CORE
+outside.c
+--function f --pointer-check
+^EXIT=10$
+^SIGNAL=0$
+^\[precondition_instance\.1\] .*static array parameter x must provide access to its declared minimum: SUCCESS$
+^\[f\.pointer_dereference\.\d+\] line 3 dereference failure: pointer outside object bounds in x\[\(signed long int\)n\]: FAILURE$
+^\*\* 1 of \d+ failed
+--
+^warning: ignoring
+--
+The --function harness provides exactly the runtime static minimum, so an
+access one element past it still fails the ordinary pointer check.

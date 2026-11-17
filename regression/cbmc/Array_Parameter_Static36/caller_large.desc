@@ -1,0 +1,11 @@
+CORE
+caller_large.c
+definition_static.c --pointer-check
+^EXIT=10$
+^SIGNAL=0$
+^\[main\.precondition_instance\.1\] line 6 static array parameter x must provide access to its declared minimum: FAILURE$
+--
+^warning: ignoring
+--
+Linking keeps the larger constant minimum (8) from the caller's declaration
+rather than the definition's smaller minimum (4).

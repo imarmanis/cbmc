@@ -4,9 +4,13 @@ weak.c
 ^EXIT=10$
 ^SIGNAL=0$
 static array parameter x must provide access to its declared minimum.*: FAILURE$
+^\[function\.pointer_dereference\.\d+\] line 7 dereference failure: pointer outside object bounds in x\[\(signed long int\)3\]: FAILURE$
+^\*\* 2 of \d+ failed
 ^VERIFICATION FAILED$
 --
 ^warning: ignoring
 --
 A separately named contract with a smaller minimum cannot justify the wrapped
-implementation's static-bound access optimization.
+implementation's static-bound access optimization: the wrapped
+implementation's static-array precondition fails, and the access beyond the
+contract's two elements keeps its ordinary pointer check.

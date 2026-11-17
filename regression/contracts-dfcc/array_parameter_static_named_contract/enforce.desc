@@ -1,0 +1,16 @@
+CORE dfcc-only
+main.c
+--dfcc main --enforce-contract function/contract
+^EXIT=0$
+^SIGNAL=0$
+^\[(function\.)?precondition_instance\.1\] .*static array parameter x must provide access to its declared minimum: SUCCESS$
+^VERIFICATION SUCCESSFUL$
+--
+^\[main\.precondition_instance\.
+^\[(function\.)?precondition_instance\.2\]
+^warning: ignoring
+--
+The harness passes an uninitialized pointer to the marked contract-checking
+wrapper, so no static-array precondition is checked at that call. The single
+check is at the call to the wrapped implementation, after the separately named
+contract's requires clauses have been assumed, and it holds.

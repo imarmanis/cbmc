@@ -3,10 +3,15 @@ main.c
 --dfcc main --replace-call-with-contract function
 ^EXIT=10$
 ^SIGNAL=0$
-Check requires clause of contract contract::function for function function: FAILURE$
+^\[function\.precondition\.\d+\] line 1 Check requires clause of contract contract::function for function function: FAILURE$
+^\[main\.precondition_instance\.1\] line 10 static array parameter .* must provide access to its declared minimum: FAILURE$
+^\*\* 2 of \d+ failed
 ^VERIFICATION FAILED$
 --
 ^warning: ignoring
 --
 A later compatible declaration refreshes the generated static requires clause
-inside an existing code contract with the stronger minimum.
+inside an existing code contract with the stronger minimum. The unmarked
+replacement wrapper also receives the ordinary call-site precondition. The
+generated assigns and frees specification functions are marked, so they add
+no further failing static-array precondition.

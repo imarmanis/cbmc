@@ -3,10 +3,13 @@ replacement.c
 --dfcc main --replace-call-with-contract function/contract
 ^EXIT=10$
 ^SIGNAL=0$
-static array parameter .* must provide access to its declared minimum.*: FAILURE$
+^\[caller\.precondition_instance\.1\] line 13 static array parameter .* must provide access to its declared minimum: FAILURE$
+^\*\* 1 of \d+ failed
 ^VERIFICATION FAILED$
 --
 ^warning: ignoring
 --
 A source call replaced by a separately named contract still satisfies the
-called function's C-level static minimum.
+called function's C-level static minimum. The weaker contract's own
+requires clause holds, and its generated specification functions add no
+further static-array failure.

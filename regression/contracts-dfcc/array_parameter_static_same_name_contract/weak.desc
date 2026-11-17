@@ -1,0 +1,17 @@
+CORE dfcc-only
+weak.c
+--dfcc main --enforce-contract f _ --pointer-check
+^EXIT=10$
+^SIGNAL=0$
+^\[precondition_instance\.1\] .*static array parameter x must provide access to its declared minimum: FAILURE$
+^\[f\.assertion\.1\] .*implementation is reachable: FAILURE$
+^VERIFICATION FAILED$
+--
+^\[main\.precondition_instance\.
+^\s*ASSUME .*r_ok\(f::
+--
+A function's own contract that is weaker than its [static N] minimum cannot be
+enforced. The contract-checking wrapper does not assume the generated
+static-array requires clause, so the implementation stays reachable, and the
+minimum fails at the call to the wrapped implementation, as it does for a
+separately named contract.

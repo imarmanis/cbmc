@@ -20,6 +20,7 @@ Author: Iason Marmanis
 #include <vector>
 
 class code_typet;
+class code_with_contract_typet;
 class namespacet;
 
 struct static_array_parameter_preconditiont
@@ -38,6 +39,24 @@ exprt expand_c_array_size(exprt size, const namespacet &ns);
 /// as well as the minimum readable byte range.
 std::vector<static_array_parameter_preconditiont>
 static_array_parameter_preconditions(
+  const code_typet &function_type,
+  const irep_idt &function_identifier,
+  const namespacet &ns);
+
+/// Preserve the strongest `[static N]` minimum from \p source in
+/// \p destination, two compatible types of the function
+/// \p function_identifier. Parameter symbols in a bound are renamed by
+/// position because each declaration may use different parameter names.
+void merge_static_array_parameter_sizes(
+  code_typet &destination,
+  const code_typet &source,
+  const irep_idt &function_identifier);
+
+/// Merge the `[static N]` minima of \p function_type into the code contract
+/// \p contract_type of the same function and rebuild the requires clauses
+/// generated from them. Minima recorded only on the contract are kept.
+void refresh_static_array_contract_requires(
+  code_with_contract_typet &contract_type,
   const code_typet &function_type,
   const irep_idt &function_identifier,
   const namespacet &ns);

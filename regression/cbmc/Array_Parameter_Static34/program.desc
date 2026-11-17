@@ -1,0 +1,13 @@
+CORE
+main.c
+--function f --show-goto-functions
+^EXIT=0$
+^SIGNAL=0$
+ASSIGN \*\(cast\(__CPROVER__start::a, signedbv\[32\]\*\[10000\]\*\)\) := side_effect statement="nondet"
+--
+ASSIGN \*\(__CPROVER__start::a \+
+DECL __CPROVER__start::tmp\$
+--
+Pins the single whole-array nondet assignment for a [static N] array of
+pointers in a --function harness: no per-element assignment and no recursive
+allocation of pointee objects.

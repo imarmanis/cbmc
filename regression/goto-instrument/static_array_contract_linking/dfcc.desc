@@ -1,0 +1,15 @@
+CORE
+definition.c caller.c
+--dfcc main --replace-call-with-contract f
+^EXIT=10$
+^SIGNAL=0$
+^\[f\.precondition\.2\] line 1 Check requires clause of contract contract::f for function f: FAILURE$
+^\[main\.precondition_instance\.1\] line 6 static array parameter .* must provide access to its declared minimum: FAILURE$
+^\*\* 2 of \d+ failed
+^VERIFICATION FAILED$
+--
+^warning: ignoring
+--
+With DFCC, the refreshed requires clause of the contract checks the larger
+linked minimum, and the call-site precondition of the replacement wrapper
+checks the same linked minimum.

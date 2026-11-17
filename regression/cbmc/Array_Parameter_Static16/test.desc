@@ -3,9 +3,11 @@ main.c
 --function f --pointer-check
 ^EXIT=0$
 ^SIGNAL=0$
+^\[precondition_instance\.1\] .*static array parameter x must provide access to its declared minimum: SUCCESS$
 ^VERIFICATION SUCCESSFUL$
 --
 ^warning: ignoring
 --
 A --function harness substitutes earlier nondeterministic arguments into a
 runtime static minimum and allocates a valid variable-length argument array.
+The instantiated precondition at the harness call must be present and hold.

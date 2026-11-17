@@ -1,0 +1,16 @@
+CORE
+definition.c caller.c
+--replace-call-with-contract f
+^EXIT=10$
+^SIGNAL=0$
+^\[f\.precondition\.1\] line 6 Check requires clause of f in main: SUCCESS$
+^\[f\.precondition\.2\] line 6 Check requires clause of f in main: FAILURE$
+^\*\* 1 of \d+ failed
+^VERIFICATION FAILED$
+--
+^warning: ignoring
+--
+The caller's translation unit declares a larger constant [static N] minimum
+than the contract's translation unit. Linking keeps the larger minimum on the
+function and refreshes the generated requires clause of the contract, so
+legacy contract replacement checks eight elements rather than four.

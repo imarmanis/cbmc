@@ -1,0 +1,15 @@
+CORE dfcc-only
+before.c
+--dfcc main --replace-call-with-contract function
+^EXIT=10$
+^SIGNAL=0$
+^\[function\.precondition\.\d+\] line 3 Check requires clause of contract contract::function for function function: FAILURE$
+^\[main\.precondition_instance\.1\] line 10 static array parameter .* must provide access to its declared minimum: FAILURE$
+^\*\* 2 of \d+ failed
+^VERIFICATION FAILED$
+--
+^warning: ignoring
+--
+A contract on a later declaration keeps the stronger minimum from an earlier
+declaration that used a different parameter name, so the generated requires
+clause demands four elements rather than the contract declaration's two.

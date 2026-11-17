@@ -1355,6 +1355,14 @@ void code_contractst::add_contract_check(
   // Generate: assume(requires)
   for(const auto &clause : code_type.c_requires())
   {
+    // A generated `[static N]` requires clause states what the C function
+    // type demands of callers; the explicit clauses must establish it. It is
+    // checked by the ordinary precondition at the call to the original
+    // function below, so assuming it here could only hide a contract that is
+    // weaker than the function type.
+    if(clause.get_bool(ID_C_static_array_precondition))
+      continue;
+
     auto instantiated_clause =
       to_lambda_expr(clause).application(instantiation_values);
     if(instantiated_clause == false)

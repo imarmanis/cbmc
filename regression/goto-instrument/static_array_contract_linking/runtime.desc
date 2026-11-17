@@ -1,0 +1,14 @@
+CORE
+plain_definition.c runtime_caller.c
+--replace-call-with-contract f
+^EXIT=10$
+^SIGNAL=0$
+^\[f\.precondition\.2\] line 8 Check requires clause of f in main: FAILURE$
+^\*\* 1 of \d+ failed
+^VERIFICATION FAILED$
+--
+^warning: ignoring
+--
+A runtime [static n] minimum that exists only on the contract's declaration is
+kept in the contract's generated requires clause when linking with a plain
+pointer definition, so contract replacement still checks it.

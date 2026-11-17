@@ -1,0 +1,12 @@
+CORE
+inner.c
+--pointer-check
+^EXIT=10$
+^SIGNAL=0$
+^\[main\.precondition_instance\.1\] line 14 static array parameter x must provide access to its declared minimum: FAILURE$
+--
+^warning: ignoring
+--
+The element size rows * columns overflows size_t and would wrap to 0, which a
+one-byte object satisfies. The generated precondition rejects the overflow in
+the runtime inner dimensions.

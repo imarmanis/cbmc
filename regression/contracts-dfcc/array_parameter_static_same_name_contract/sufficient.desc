@@ -1,0 +1,16 @@
+CORE dfcc-only
+sufficient.c
+--dfcc main --enforce-contract f _ --pointer-check
+^EXIT=10$
+^SIGNAL=0$
+^\[precondition_instance\.1\] .*static array parameter x must provide access to its declared minimum: SUCCESS$
+^\[f\.assertion\.1\] .*implementation is reachable: FAILURE$
+^\*\* 1 of \d+ failed
+^VERIFICATION FAILED$
+--
+^\[main\.precondition_instance\.
+^\s*ASSUME .*r_ok\(f::
+--
+A function's own contract whose is_fresh size covers the [static N] minimum
+satisfies it at the call to the wrapped implementation. The reachability
+assertion is the only failure, so enforcement is not vacuous.

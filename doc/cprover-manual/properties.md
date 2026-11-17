@@ -162,8 +162,9 @@ creating the precondition could change program behavior. Static bounds from
 compatible declarations in the same translation unit are retained and their
 parameter names are adjusted to those of the definition. The strongest
 constant minimum present on the linked function symbol is retained across
-translation units; a declaration discarded before linking cannot contribute a
-minimum. The generic precondition pass obtains the final bound from the called
+translation units, and the requires clauses generated in the function's code
+contract are rebuilt from it; a declaration discarded before linking cannot
+contribute a minimum. The generic precondition pass obtains the final bound from the called
 function type, so it also checks calls whose definition is unavailable. When `--function` selects a
 function with static array parameters, the generated harness substitutes
 previous arguments into runtime bounds and constructs an outer array that
@@ -173,15 +174,19 @@ apply. Static outer arrays, including arrays of pointers, are initialized with
 one nondeterministic assignment.
 
 When a function has an explicit code contract, the static minimum is also added
-to that contract's requires clauses. Contract enforcement may therefore assume
-the language requirement before checking the implementation, while contract
-replacement checks it at the call. Contract-checking wrappers and generated
-specification functions are marked so the generic precondition pass does not
-add a premature duplicate check. The wrapped implementation remains unmarked:
-its check runs after the requires clauses have been assumed, proving that a
-separately named contract supplies the function's C-level minimum. Replacement
-wrappers also remain unmarked because their callers are source-level calls that
-must satisfy that minimum.
+to that contract's requires clauses. Contract replacement checks it like any
+other requires clause, including at recursive calls replaced by the contract.
+Contract enforcement does not assume it: the explicit requires clauses must
+establish the minimum, which the generic precondition pass checks at the call
+to the wrapped implementation after those clauses have been assumed. A contract
+weaker than the function's static minimum, whether it is the function's own
+contract or a separately named one, therefore fails instead of making the check
+vacuous. Contract-checking wrappers and generated specification functions are
+marked so the generic precondition pass does not add a premature check at their
+calls. Replacement wrappers remain unmarked because their callers are
+source-level calls that must satisfy the minimum of the linked function type,
+which can be stronger than the bound recorded in the contract when another
+translation unit declares a larger constant minimum.
 
 As all of these checks apply across the entire input program, we may wish to
 disable or enable them for selected statements in the program.

@@ -654,6 +654,18 @@ void dfcc_wrapper_programt::encode_requires_clauses()
   // translate each requires clause
   for(const auto &r : contract_code_type.c_requires())
   {
+    // A generated `[static N]` requires clause states what the C function
+    // type demands of callers; the explicit clauses must establish it. When
+    // checking a contract it is not assumed: the ordinary precondition at the
+    // call to the wrapped function checks it after the explicit clauses have
+    // been assumed. When replacing a call it is asserted like any requires
+    // clause.
+    if(
+      statement_type == ID_assume && r.get_bool(ID_C_static_array_precondition))
+    {
+      continue;
+    }
+
     exprt requires_lmbd =
       to_lambda_expr(r).application(contract_lambda_parameters);
 
